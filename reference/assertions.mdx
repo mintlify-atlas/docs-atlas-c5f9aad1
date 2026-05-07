@@ -1,0 +1,518 @@
+---
+title: "Assertion types and configuration reference"
+description: "All promptfoo assertion types: string checks, LLM-graded rubrics, RAG metrics, cost and latency limits, and custom JavaScript or Python validators."
+---
+
+Assertions define the pass/fail criteria for each test case. Every assertion has a `type`, an optional `value`, an optional `threshold`, and optional `weight`. Most assertion types support a `not-` prefix to invert the result.
+
+```yaml
+assert:
+  - type: contains
+    value: "Paris"
+  - type: not-contains
+    value: "I don't know"
+  - type: llm-rubric
+    value: "The answer is factually correct and cites a source."
+    threshold: 0.7
+```
+
+## Assertion fields
+
+<ParamField path="type" type="string" required>
+  The assertion type. See all types below.
+</ParamField>
+
+<ParamField path="value" type="string | string[] | number | object | function">
+  The expected value or rubric. Exact meaning depends on the assertion type.
+</ParamField>
+
+<ParamField path="threshold" type="number">
+  Minimum passing score (0–1) for numeric assertion types such as `similar`, `cost`, `latency`, `javascript`, and `python`.
+</ParamField>
+
+<ParamField path="weight" type="number">
+  Relative weight of this assertion when computing a combined score. Defaults to `1`.
+</ParamField>
+
+<ParamField path="provider" type="string | ProviderOptions">
+  Override the grading provider for model-graded assertion types.
+</ParamField>
+
+<ParamField path="rubricPrompt" type="string | string[] | ChatMessage[]">
+  Custom rubric prompt for model-graded assertions, overriding the built-in prompt.
+</ParamField>
+
+<ParamField path="metric" type="string">
+  Named metric label. Assertions sharing the same `metric` are aggregated together in results.
+</ParamField>
+
+<ParamField path="transform" type="string | function">
+  Transform the output before this assertion runs. Receives the (already test-transformed) output.
+</ParamField>
+
+---
+
+## Deterministic string assertions
+
+<AccordionGroup>
+
+<Accordion title="equals">
+  Passes when the output exactly matches `value` (after trimming whitespace).
+
+  ```yaml
+  assert:
+    - type: equals
+      value: "4"
+  ```
+</Accordion>
+
+<Accordion title="contains">
+  Passes when the output contains the `value` substring.
+
+  ```yaml
+  assert:
+    - type: contains
+      value: "capital"
+  ```
+
+  Negate with `not-contains`.
+</Accordion>
+
+<Accordion title="contains-all">
+  Passes when the output contains **all** strings in the `value` array.
+
+  ```yaml
+  assert:
+    - type: contains-all
+      value: ["Paris", "France", "Eiffel"]
+  ```
+</Accordion>
+
+<Accordion title="contains-any">
+  Passes when the output contains **at least one** string from the `value` array.
+
+  ```yaml
+  assert:
+    - type: contains-any
+      value: ["Paris", "capital of France"]
+  ```
+</Accordion>
+
+<Accordion title="icontains">
+  Case-insensitive version of `contains`.
+
+  ```yaml
+  assert:
+    - type: icontains
+      value: "paris"
+  ```
+
+  Negate with `not-icontains`.
+</Accordion>
+
+<Accordion title="icontains-all">
+  Case-insensitive version of `contains-all`.
+
+  ```yaml
+  assert:
+    - type: icontains-all
+      value: ["paris", "france"]
+  ```
+</Accordion>
+
+<Accordion title="icontains-any">
+  Case-insensitive version of `contains-any`.
+</Accordion>
+
+<Accordion title="starts-with">
+  Passes when the output starts with the `value` string.
+
+  ```yaml
+  assert:
+    - type: starts-with
+      value: "Sure, here is"
+  ```
+</Accordion>
+
+<Accordion title="regex">
+  Passes when the output matches the regular expression in `value`.
+
+  ```yaml
+  assert:
+    - type: regex
+      value: "\\d{4}-\\d{2}-\\d{2}"
+  ```
+
+  Negate with `not-regex`.
+</Accordion>
+
+<Accordion title="levenshtein">
+  Passes when the Levenshtein distance between the output and `value` is at most `threshold`.
+
+  ```yaml
+  assert:
+    - type: levenshtein
+      value: "expected text"
+      threshold: 5
+  ```
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Structural assertions
+
+<AccordionGroup>
+
+<Accordion title="is-json">
+  Passes when the output is valid JSON.
+
+  ```yaml
+  assert:
+    - type: is-json
+  ```
+</Accordion>
+
+<Accordion title="contains-json">
+  Passes when the output contains a valid JSON object or array. Optionally validate against a JSON Schema by providing it as `value`.
+
+  ```yaml
+  assert:
+    - type: contains-json
+      value:
+        type: object
+        required: [name, age]
+        properties:
+          name:
+            type: string
+          age:
+            type: number
+  ```
+</Accordion>
+
+<Accordion title="is-html">
+  Passes when the output is valid HTML.
+</Accordion>
+
+<Accordion title="contains-html">
+  Passes when the output contains valid HTML.
+</Accordion>
+
+<Accordion title="is-sql">
+  Passes when the output is a valid SQL query.
+</Accordion>
+
+<Accordion title="contains-sql">
+  Passes when the output contains a valid SQL query.
+</Accordion>
+
+<Accordion title="is-valid-openai-tools-call">
+  Passes when the output is a valid OpenAI tool call response.
+</Accordion>
+
+<Accordion title="is-valid-function-call">
+  Passes when the output is a valid function call JSON.
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Code-based assertions
+
+<AccordionGroup>
+
+<Accordion title="javascript">
+  Executes an inline JavaScript expression or file. The function receives `output` (string), `context` (with `vars`, `prompt`, `provider`, etc.), and must return `boolean`, `number`, or a `GradingResult`.
+
+  ```yaml
+  assert:
+    - type: javascript
+      value: "output.length < 200"
+  ```
+
+  Or reference a file:
+
+  ```yaml
+  assert:
+    - type: javascript
+      value: "file://assertions/check-format.js"
+  ```
+</Accordion>
+
+<Accordion title="python">
+  Executes a Python snippet or file. The function receives `output` and `context` and must return `bool`, `float`, or a dict matching `GradingResult`.
+
+  ```yaml
+  assert:
+    - type: python
+      value: "len(output) > 10 and 'error' not in output.lower()"
+  ```
+
+  Or reference a file:
+
+  ```yaml
+  assert:
+    - type: python
+      value: "file://assertions/validate.py:check_output"
+  ```
+</Accordion>
+
+<Accordion title="webhook">
+  Sends the output to a URL via HTTP POST and uses the response to determine pass/fail. The endpoint must return `{ pass: boolean, score?: number, reason?: string }`.
+
+  ```yaml
+  assert:
+    - type: webhook
+      value: "https://my-validator.example.com/check"
+  ```
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Model-graded assertions
+
+<AccordionGroup>
+
+<Accordion title="llm-rubric">
+  Uses an LLM judge to grade the output against a free-text rubric. Returns a score between 0 and 1. Passes when the score meets `threshold` (default: `0.5`).
+
+  ```yaml
+  assert:
+    - type: llm-rubric
+      value: "The response is helpful, polite, and under 100 words."
+      threshold: 0.7
+  ```
+</Accordion>
+
+<Accordion title="factuality">
+  Checks whether the output is factually consistent with a reference `value`. Uses an LLM to evaluate factual accuracy.
+
+  ```yaml
+  assert:
+    - type: factuality
+      value: "The Eiffel Tower is located in Paris, France."
+  ```
+</Accordion>
+
+<Accordion title="model-graded-closedqa">
+  Model-graded closed-domain QA. Checks whether the output correctly answers a question given specific source material.
+
+  ```yaml
+  assert:
+    - type: model-graded-closedqa
+      value: "According to the context, what year was the company founded?"
+  ```
+</Accordion>
+
+<Accordion title="answer-relevance">
+  RAG metric. Checks whether the output is relevant to the input question. Higher scores indicate better relevance.
+
+  ```yaml
+  assert:
+    - type: answer-relevance
+      threshold: 0.7
+  ```
+</Accordion>
+
+<Accordion title="context-recall">
+  RAG metric. Measures how much of the reference context is reflected in the output.
+
+  ```yaml
+  assert:
+    - type: context-recall
+      value: "{{context}}"
+      threshold: 0.8
+  ```
+</Accordion>
+
+<Accordion title="context-faithfulness">
+  RAG metric. Checks whether the output is faithful to the provided context and does not hallucinate.
+
+  ```yaml
+  assert:
+    - type: context-faithfulness
+      value: "{{context}}"
+      threshold: 0.9
+  ```
+</Accordion>
+
+<Accordion title="context-relevance">
+  RAG metric. Measures whether the retrieved context is relevant to the question.
+
+  ```yaml
+  assert:
+    - type: context-relevance
+      threshold: 0.7
+  ```
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Semantic similarity
+
+<AccordionGroup>
+
+<Accordion title="similar">
+  Computes the cosine similarity between the output and the reference `value` using an embedding model. Passes when the similarity score meets `threshold`.
+
+  ```yaml
+  assert:
+    - type: similar
+      value: "The capital of France is Paris."
+      threshold: 0.8
+  ```
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Performance assertions
+
+<AccordionGroup>
+
+<Accordion title="cost">
+  Passes when the total token cost of the response is below `threshold` (in USD).
+
+  ```yaml
+  assert:
+    - type: cost
+      threshold: 0.005
+  ```
+</Accordion>
+
+<Accordion title="latency">
+  Passes when the response latency is below `threshold` (in milliseconds).
+
+  ```yaml
+  assert:
+    - type: latency
+      threshold: 3000
+  ```
+</Accordion>
+
+<Accordion title="perplexity">
+  Passes when the model's perplexity score is below `threshold`. Lower perplexity indicates higher model confidence.
+
+  ```yaml
+  assert:
+    - type: perplexity
+      threshold: 5
+  ```
+</Accordion>
+
+<Accordion title="perplexity-score">
+  Returns a normalized (0–1) score based on perplexity. Passes when the score meets `threshold`.
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Other assertion types
+
+<AccordionGroup>
+
+<Accordion title="is-refusal">
+  Passes when the model output is detected as a refusal (e.g. "I can't help with that"). Useful for confirming guardrail behavior.
+
+  ```yaml
+  assert:
+    - type: is-refusal
+  ```
+</Accordion>
+
+<Accordion title="moderation">
+  Checks the output against a moderation API. Passes when no harmful content is flagged.
+
+  ```yaml
+  assert:
+    - type: moderation
+  ```
+</Accordion>
+
+<Accordion title="rouge-n">
+  Computes ROUGE-N recall between the output and a reference. Passes when the score meets `threshold`.
+
+  ```yaml
+  assert:
+    - type: rouge-n
+      value: "Reference summary text."
+      threshold: 0.5
+  ```
+</Accordion>
+
+<Accordion title="bleu">
+  Computes BLEU score between the output and a reference translation. Passes when the score meets `threshold`.
+</Accordion>
+
+<Accordion title="select-best">
+  When multiple providers are tested, selects the best output using an LLM judge. All others fail.
+
+  ```yaml
+  assert:
+    - type: select-best
+      value: "Which response is most concise and accurate?"
+  ```
+</Accordion>
+
+<Accordion title="classifier">
+  Runs the output through a Hugging Face or custom classification model. Passes when the output matches `value` label(s).
+</Accordion>
+
+<Accordion title="finish-reason">
+  Checks the model's finish reason (e.g. `stop`, `length`, `tool_calls`).
+
+  ```yaml
+  assert:
+    - type: finish-reason
+      value: stop
+  ```
+</Accordion>
+
+<Accordion title="skill-used">
+  Checks whether a specific skill or tool was used in the response (for agentic evaluations).
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## `not-` prefix
+
+Most deterministic assertion types support a `not-` prefix to invert their logic:
+
+```yaml
+assert:
+  - type: not-contains
+    value: "error"
+  - type: not-regex
+    value: "\\bsorry\\b"
+  - type: not-icontains
+    value: "I cannot"
+```
+
+---
+
+## Assertion sets
+
+Group multiple assertions under a shared threshold, metric, and weight:
+
+```yaml
+assert:
+  - type: assert-set
+    threshold: 0.8
+    metric: quality
+    weight: 2
+    assert:
+      - type: contains
+        value: "Paris"
+      - type: llm-rubric
+        value: "Answer is informative and polite."
+```

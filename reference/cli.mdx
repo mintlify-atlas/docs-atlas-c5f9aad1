@@ -1,0 +1,275 @@
+---
+title: "Promptfoo CLI command reference"
+description: "Complete reference for all promptfoo CLI commands and flags, including eval, init, view, share, redteam, cache, list, import, export, and auth."
+---
+
+The `promptfoo` CLI (aliased as `pf`) is the primary interface for running evaluations, managing results, and red-teaming LLM applications. All commands accept `--env-file <path>` to load environment variables and `--verbose` for debug output.
+
+<Note>
+  `pf` is a short alias for `promptfoo`. Both work identically: `pf eval` and `promptfoo eval` are equivalent.
+</Note>
+
+## Common options
+
+These flags are supported by most commands:
+
+| Flag | Description |
+|---|---|
+| `--env-file, --env-path <path>` | Path to a `.env` file. Repeat or comma-separate for multiple files. Later files override earlier ones. |
+| `-v, --verbose` | Show debug logs. **Note:** in `eval`, `-v` is short for `--vars`. Use `--verbose` or `LOG_LEVEL=debug` instead. |
+| `--help` | Display help for a command. |
+
+## `promptfoo eval`
+
+Runs an evaluation against one or more prompts and providers. By default, reads `promptfooconfig.yaml` in the current directory.
+
+**Aliases:** `pf eval`
+
+```bash
+promptfoo eval [options]
+```
+
+| Flag | Description |
+|---|---|
+| `-a, --assertions <path>` | Path to an assertions file. |
+| `-c, --config <paths...>` | Path to configuration file(s). Automatically loads `promptfooconfig.yaml`. |
+| `--delay <number>` | Milliseconds to wait between each API call. |
+| `--description <text>` | Description label for this eval run. |
+| `--filter-failing <path\|id>` | Re-run tests that failed (assertion failures + errors) in a previous eval. |
+| `--filter-failing-only <path\|id>` | Re-run tests with assertion failures only, excluding errors. |
+| `--filter-errors-only <path\|id>` | Re-run tests that resulted in errors in a previous eval. |
+| `-n, --filter-first-n <number>` | Run only the first N tests. |
+| `--filter-range <start:end>` | Run tests in a zero-based index range (end is exclusive). |
+| `--filter-sample <number>` | Run a random sample of N tests. |
+| `--filter-metadata <key=value>` | Run only tests whose metadata matches. Repeat for AND logic. |
+| `--filter-pattern <pattern>` | Run only tests whose description matches the regex. |
+| `--filter-prompts <pattern>` | Run only tests whose prompt `id` or `label` matches the regex. |
+| `--filter-providers <pattern>` | Run only tests whose provider `id` or `label` matches the regex. |
+| `--filter-targets <pattern>` | Alias for `--filter-providers`. |
+| `--grader <provider>` | Provider used to grade model-graded outputs. |
+| `-j, --max-concurrency <number>` | Maximum number of concurrent API calls. |
+| `--model-outputs <path>` | Path to JSON with pre-computed LLM output strings. |
+| `--no-cache` | Disable read/write of the disk cache. |
+| `--no-progress-bar` | Hide the progress bar. |
+| `--no-table` | Do not print the results table to stdout. |
+| `--no-write` | Do not write results to the promptfoo data directory. |
+| `-o, --output <paths...>` | Output file path(s). Supports `csv`, `txt`, `json`, `jsonl`, `yaml`, `html`, `xml`, `junit.xml`. |
+| `-p, --prompts <paths...>` | Paths to prompt files (`.txt`). |
+| `--prompt-prefix <path>` | Text prepended to every prompt. |
+| `--prompt-suffix <path>` | Text appended to every prompt. |
+| `-r, --providers <name\|path...>` | Provider identifiers or paths to custom provider modules. |
+| `--remote` | Force remote inference (used with red teams). |
+| `--repeat <number>` | Run each test case N times. |
+| `--resume [evalId]` | Resume a paused or incomplete eval. Omit `evalId` to resume the latest. |
+| `--retry-errors` | Retry all ERROR results from the latest eval. |
+| `--share` | Create a shareable URL after the eval completes. |
+| `--no-share` | Disable sharing even if the config file enables it. |
+| `--suggest-prompts <number>` | Generate N alternative prompts and append them. |
+| `--table` | Print the results table (default). |
+| `--table-cell-max-length <number>` | Truncate table cell content to this length. |
+| `-t, --tests <path>` | Path to a CSV file with test cases. |
+| `-v, --vars <path>` | Alias for `--tests`. |
+| `--var <key=value>` | Inline variable in `key=value` format. |
+| `-w, --watch` | Watch for config changes and automatically re-run. |
+| `-x, --extension <paths...>` | Extension hook paths, e.g. `file://handler.js:afterAll`. |
+
+**Exit codes:** `100` when at least one test fails or the pass rate falls below `PROMPTFOO_PASS_RATE_THRESHOLD`. `1` for any other error. Override the failure exit code with `PROMPTFOO_FAILED_TEST_EXIT_CODE`.
+
+```bash
+# Basic eval
+promptfoo eval -c promptfooconfig.yaml
+
+# Parallel sharding across CI jobs
+promptfoo eval --filter-range 0:100
+promptfoo eval --filter-range 100:200
+
+# Retry only errored results
+promptfoo eval --retry-errors
+
+# Resume a specific eval
+promptfoo eval --resume eval_abc123
+```
+
+---
+
+## `promptfoo init`
+
+Initialize a new promptfoo project with sample prompts, providers, and test cases.
+
+```bash
+promptfoo init [directory] [options]
+```
+
+| Flag | Description |
+|---|---|
+| `directory` | Directory to create files in (defaults to current directory). |
+| `--no-interactive` | Skip interactive prompts and use defaults. |
+| `--example [name]` | Download a named example project. |
+
+```bash
+promptfoo init my-project
+promptfoo init --example openai-basic
+```
+
+---
+
+## `promptfoo view`
+
+Start a local web UI to browse and compare evaluation results.
+
+```bash
+promptfoo view [directory] [options]
+```
+
+| Flag | Description |
+|---|---|
+| `[directory]` | Promptfoo output or config directory to visualize. |
+| `-p, --port <number>` | Port for the local server. |
+| `-y, --yes` | Skip confirmation and open the URL automatically. |
+
+```bash
+promptfoo view
+promptfoo view --port 4000 --yes
+```
+
+---
+
+## `promptfoo share`
+
+Create a shareable URL for an eval result that can be viewed online.
+
+```bash
+promptfoo share [id]
+```
+
+Omit `id` to share the most recent eval.
+
+---
+
+## `promptfoo cache clean`
+
+Clear the local disk cache used by eval runs.
+
+```bash
+promptfoo cache clean
+```
+
+---
+
+## `promptfoo list`
+
+List stored resources.
+
+```bash
+promptfoo list evals
+promptfoo list prompts
+promptfoo list datasets
+```
+
+---
+
+## `promptfoo show eval <id>`
+
+Show details of a specific eval by its ID.
+
+```bash
+promptfoo show eval <id>
+```
+
+---
+
+## `promptfoo export`
+
+Export eval records or logs.
+
+```bash
+promptfoo export eval <evalId>
+promptfoo export logs
+```
+
+---
+
+## `promptfoo import`
+
+Import an eval from a JSON file.
+
+```bash
+promptfoo import <filepath>
+```
+
+---
+
+## `promptfoo redteam`
+
+Red team your LLM application by generating adversarial test cases and running attacks.
+
+### `promptfoo redteam run`
+
+Run a red team evaluation.
+
+```bash
+promptfoo redteam run [options]
+```
+
+| Flag | Description |
+|---|---|
+| `-c, --config <path>` | Path to the red team configuration file. |
+| `-o, --output <path>` | Path to write results. |
+| `--no-cache` | Disable the cache for this run. |
+
+### `promptfoo redteam generate`
+
+Generate adversarial test cases from a red team config.
+
+```bash
+promptfoo redteam generate [options]
+```
+
+### `promptfoo redteam init`
+
+Initialize a red team project with a starter configuration.
+
+```bash
+promptfoo redteam init
+```
+
+### `promptfoo redteam report`
+
+Generate a vulnerability report from a red team eval.
+
+```bash
+promptfoo redteam report [evalId]
+```
+
+---
+
+## `promptfoo validate`
+
+Validate a promptfoo configuration file.
+
+```bash
+promptfoo validate config
+promptfoo validate target
+```
+
+---
+
+## `promptfoo auth`
+
+Manage authentication for cloud features.
+
+```bash
+promptfoo auth login
+promptfoo auth logout
+promptfoo auth whoami
+```
+
+---
+
+## `promptfoo feedback`
+
+Send feedback directly to the Promptfoo developers.
+
+```bash
+promptfoo feedback "<message>"
+```

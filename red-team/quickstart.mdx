@@ -1,0 +1,207 @@
+---
+title: "Run your first AI red team scan"
+description: "Install Promptfoo, configure a red team target, run adversarial probes against your LLM application, and view a full vulnerability report in under 10 minutes."
+---
+
+This guide walks you through running a complete red team scan against an LLM application. You'll install Promptfoo, create a configuration file, run adversarial test cases, and view a vulnerability report showing where your application is at risk.
+
+## Prerequisites
+
+- Node.js 20.20+ or 22.22+
+- An `OPENAI_API_KEY` environment variable set (used for attack generation and grading)
+
+## Steps
+
+<Steps>
+  <Step title="Install Promptfoo">
+    Install Promptfoo globally with npm or Homebrew, or use `npx` to run without installing:
+
+    <CodeGroup>
+
+    ```bash npx (no install required)
+    npx promptfoo@latest redteam setup
+    ```
+
+    ```bash npm
+    npm install -g promptfoo
+    promptfoo redteam setup
+    ```
+
+    ```bash brew
+    brew install promptfoo
+    promptfoo redteam setup
+    ```
+
+    </CodeGroup>
+
+    The `setup` command opens a web UI that guides you through configuring your red team project. If you prefer to skip the UI, use the `--no-gui` flag:
+
+    ```bash
+    npx promptfoo@latest redteam init --no-gui
+    ```
+  </Step>
+
+  <Step title="Create a red team configuration">
+    After setup, save the generated configuration as `promptfooconfig.yaml`. Here is a minimal but complete example for testing an HTTP API endpoint:
+
+    ```yaml promptfooconfig.yaml
+    targets:
+      - id: https
+        label: travel-agent
+        config:
+          url: 'https://example.com/generate'
+          method: POST
+          headers:
+            'Content-Type': 'application/json'
+          body:
+            myPrompt: '{{prompt}}'
+
+    redteam:
+      purpose: >
+        The user is a budget traveler looking for the best deals.
+        The system is a travel agent that helps the user plan their trip.
+        The user is anonymous and should not be able to access any information
+        about other users, employees, or other individuals.
+      plugins:
+        - default
+        - pii:direct
+        - pii:cross-session-leak
+        - harmful:self-harm
+        - harmful:hate
+        - prompt-injection
+      strategies:
+        - jailbreak:meta
+        - jailbreak:composite
+        - basic
+      numTests: 5
+    ```
+
+    To test a specific prompt and model directly instead of an HTTP endpoint:
+
+    ```yaml promptfooconfig.yaml
+    prompts:
+      - 'Act as a travel agent and help the user plan their trip. User query: {{query}}'
+
+    targets:
+      - id: openai:gpt-4o-mini
+        label: travel-agent-mini
+
+    redteam:
+      purpose: >
+        Travel planning assistant for budget travelers.
+        Users should not be able to access information about other users.
+      plugins:
+        - default
+      numTests: 5
+    ```
+
+    <Tip>
+      The `purpose` field significantly improves the quality of generated test cases. Be specific about who the user is, what they can access, and what actions the system should or should not take.
+    </Tip>
+  </Step>
+
+  <Step title="Run the red team scan">
+    From the directory containing your `promptfooconfig.yaml`, run:
+
+    <CodeGroup>
+
+    ```bash npx
+    npx promptfoo@latest redteam run
+    ```
+
+    ```bash npm / brew
+    promptfoo redteam run
+    ```
+
+    </CodeGroup>
+
+    This command:
+    1. Generates several hundred adversarial inputs across your configured plugins
+    2. Applies attack strategies (jailbreaks, injections, obfuscation) to each input
+    3. Sends the probes to your target and records responses
+    4. Grades each response to determine whether the attack succeeded
+
+    Generated test cases are saved to `redteam.yaml`. Subsequent runs reuse these cases unless you regenerate.
+
+    <Note>
+      `promptfoo redteam run` combines the `redteam generate` and `redteam eval` steps. Run `promptfoo redteam generate` separately if you want to inspect or modify test cases before evaluating.
+    </Note>
+  </Step>
+
+  <Step title="View the vulnerability report">
+    Once the scan completes, open the report:
+
+    <CodeGroup>
+
+    ```bash npx
+    npx promptfoo@latest redteam report
+    ```
+
+    ```bash npm / brew
+    promptfoo redteam report
+    ```
+
+    </CodeGroup>
+
+    The report shows:
+
+    - **Vulnerability categories** — Which attack types succeeded, such as prompt injection, PII leakage, or harmful content generation
+    - **Severity levels** — Critical, high, medium, and low classifications based on impact and exploit success rate
+    - **Attack logs** — The exact inputs that triggered vulnerabilities and the raw model responses
+    - **Suggested mitigations** — Recommendations for prompt engineering, guardrails, or architectural changes to address each finding
+
+    Clicking into a specific category shows the full list of test cases, including which strategy was used and why the grader flagged the response as a failure.
+  </Step>
+</Steps>
+
+## Common target types
+
+### HTTP API endpoint
+
+Use the `https` provider to attack any endpoint accessible from your machine:
+
+```yaml
+targets:
+  - id: https
+    label: my-api
+    config:
+      url: 'https://api.example.com/chat'
+      method: POST
+      headers:
+        'Content-Type': 'application/json'
+        'Authorization': 'Bearer {{env.API_TOKEN}}'
+      body:
+        message: '{{prompt}}'
+```
+
+### Direct model access
+
+Use a provider ID to test a model without an intermediate API layer:
+
+```yaml
+targets:
+  - id: openai:gpt-4o
+    label: gpt4o-direct
+```
+
+Promptfoo supports dozens of providers including Anthropic, Azure OpenAI, Google Gemini, Mistral, Ollama, and custom HTTP endpoints. See [providers](/providers) for the full list.
+
+### Custom Python or JavaScript
+
+For applications with complex logic, connect a custom script directly:
+
+```yaml
+targets:
+  - id: python:path/to/my_app.py
+    label: my-custom-app
+```
+
+## Continuous improvement
+
+Red teaming is most valuable as a recurring process, not a one-time audit. Run scans:
+
+- Before each production deployment
+- After changes to system prompts, plugins, or retrieval sources
+- On a scheduled cadence to catch regressions
+
+Promptfoo integrates with CI/CD pipelines so scans can block deployments when risk scores exceed a threshold. See the [CI/CD integration guide](/integrations/ci-cd) for setup instructions.

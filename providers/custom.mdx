@@ -1,0 +1,207 @@
+---
+title: "Custom and HTTP providers in Promptfoo"
+description: "Integrate any API or model with Promptfoo using HTTP endpoints, Python scripts, JavaScript modules, shell commands, or the TypeScript provider interface."
+---
+
+Promptfoo supports several ways to connect to APIs and models that don't have a built-in provider. Choose the approach that fits your stack.
+
+## HTTP provider
+
+Any HTTP or HTTPS URL used as a provider ID is treated as an HTTP endpoint. Promptfoo sends the prompt as a POST request and reads the response.
+
+```yaml title="promptfooconfig.yaml"
+providers:
+  - id: https://api.example.com/v1/chat/completions
+    config:
+      headers:
+        Authorization: "Bearer {{env.MY_API_KEY}}"
+        Content-Type: application/json
+      body:
+        model: my-model
+        messages:
+          - role: user
+            content: "{{prompt}}"
+      responseParser: "json.choices[0].message.content"
+```
+
+Use `responseParser` to extract the text from the response. It accepts a dot-notation path into the parsed JSON, or a JavaScript expression.
+
+### WebSocket provider
+
+```yaml
+providers:
+  - id: ws://localhost:8080/chat
+    config:
+      messageTemplate: '{"prompt": "{{prompt}}"}'
+      responseParser: "json.response"
+```
+
+## JavaScript provider
+
+Create a class with an `id()` method and a `callApi()` method:
+
+```javascript title="myProvider.mjs"
+export default class MyProvider {
+  id = () => "my-provider";
+
+  callApi = async (prompt, context, options) => {
+    const response = await fetch("https://api.example.com/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
+    const data = await response.json();
+    return {
+      output: data.text,
+      tokenUsage: { total: data.tokens },
+    };
+  };
+}
+```
+
+Reference it in your config:
+
+```yaml
+providers:
+  - file://myProvider.mjs
+```
+
+### Provider response format
+
+`callApi` must return an object with at least an `output` field:
+
+```javascript
+{
+  output: "Model response text or structured data",
+  error: "Error message if the call failed",
+  tokenUsage: {
+    total: 100,
+    prompt: 40,
+    completion: 60,
+  },
+  cost: 0.002,        // Optional: cost in USD
+  cached: false,
+  metadata: {},       // Optional: additional data
+}
+```
+
+## Python provider
+
+Create a Python file with a `call_api` function:
+
+```python title="my_provider.py"
+import json
+import urllib.request
+
+def call_api(prompt: str, options: dict, context: dict) -> dict:
+    data = json.dumps({"prompt": prompt}).encode()
+    req = urllib.request.Request(
+        "https://api.example.com/generate",
+        data=data,
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req) as resp:
+        result = json.loads(resp.read())
+    return {"output": result["text"]}
+```
+
+Reference it in your config:
+
+```yaml
+providers:
+  - id: file://my_provider.py
+```
+
+You can also export a custom class:
+
+```python title="my_class_provider.py"
+class MyProvider:
+    def __init__(self, options: dict):
+        self.model = options.get("config", {}).get("model", "default-model")
+
+    def id(self) -> str:
+        return "my-class-provider"
+
+    def call_api(self, prompt: str, options: dict, context: dict) -> dict:
+        # Call your API here
+        return {"output": f"Response from {self.model}: {prompt}"}
+```
+
+## TypeScript provider interface
+
+For type-safe custom providers, implement the `ApiProvider` interface:
+
+```typescript title="myProvider.ts"
+import type { ApiProvider, ProviderResponse, CallApiContextParams } from "promptfoo";
+
+export default class MyProvider implements ApiProvider {
+  id(): string {
+    return "my-typescript-provider";
+  }
+
+  async callApi(
+    prompt: string,
+    context?: CallApiContextParams,
+  ): Promise<ProviderResponse> {
+    // context.vars contains test case variables
+    const vars = context?.vars ?? {};
+
+    const response = await fetch("https://api.example.com/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, ...vars }),
+    });
+
+    const data = await response.json();
+    return {
+      output: data.text,
+      tokenUsage: {
+        total: data.usage?.total_tokens,
+        prompt: data.usage?.prompt_tokens,
+        completion: data.usage?.completion_tokens,
+      },
+    };
+  }
+}
+```
+
+## Shell command provider
+
+Run any script or binary as a provider using the `exec:` prefix:
+
+```yaml
+providers:
+  - "exec: python chain.py"
+  - "exec: node my_agent.js"
+  - "exec: ./run_model.sh"
+```
+
+The script receives the prompt on stdin and must write the response to stdout.
+
+## Passing config to custom providers
+
+Config values are passed to the provider constructor via the `options` argument:
+
+```yaml
+providers:
+  - id: file://myProvider.mjs
+    config:
+      model: gpt-5-mini
+      temperature: 0.5
+      customSetting: hello
+```
+
+```javascript title="myProvider.mjs"
+export default class MyProvider {
+  constructor(options) {
+    this.model = options.config?.model ?? "default";
+    this.temperature = options.config?.temperature ?? 0.7;
+  }
+
+  id = () => "my-provider";
+
+  callApi = async (prompt) => {
+    // use this.model and this.temperature
+  };
+}
+```

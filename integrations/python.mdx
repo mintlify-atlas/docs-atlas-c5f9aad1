@@ -1,0 +1,248 @@
+---
+title: "Using Promptfoo with Python"
+description: "Write providers, assertions, test generators, and prompts in Python to evaluate LLMs without writing any JavaScript or TypeScript."
+---
+
+Promptfoo runs on Node.js but has first-class Python support. You can write every part of your eval pipeline in Python — providers that call models, assertions that validate outputs, test case generators, and prompt builders — without writing any JavaScript.
+
+The `file://` prefix tells promptfoo to execute a Python function. Promptfoo automatically detects your Python installation.
+
+```yaml
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+prompts:
+  - file://prompts.py:create_prompt
+
+providers:
+  - file://provider.py
+
+tests:
+  - file://tests.py:generate_tests
+
+defaultTest:
+  assert:
+    - type: python
+      value: file://assert.py:check
+```
+
+## Providers
+
+A Python provider is a file with a `call_api` function. Use `file://` to reference it:
+
+```yaml
+providers:
+  - file://provider.py           # Uses call_api() by default
+  - file://provider.py:my_func   # Specify a different function name
+```
+
+The function receives three arguments and must return a dict with an `output` key:
+
+```python
+def call_api(prompt, options, context):  # also works as async def
+    # prompt: string or JSON-encoded messages
+    # options: {"config": {...}} from YAML provider config
+    # context: {"vars": {...}} from the test case
+
+    return {
+        "output": "response text",
+        # Optional fields:
+        "tokenUsage": {"total": 100, "prompt": 20, "completion": 80},
+        "cost": 0.001,
+    }
+```
+
+A real provider calling the OpenAI API:
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+
+def call_api(prompt, options, context):
+    response = client.responses.create(
+        model="gpt-4.1-mini",
+        input=prompt,
+    )
+    return {"output": response.output_text}
+```
+
+## Assertions
+
+Use `type: python` to run custom validation logic in assertions:
+
+```yaml
+assert:
+  # Inline expression — returns bool or float 0-1
+  - type: python
+    value: "'keyword' in output.lower()"
+
+  # External file
+  - type: python
+    value: file://assert.py
+```
+
+For external files, define a `get_assert` function:
+
+```python
+def get_assert(output, context):
+    # output: the LLM response string
+    # context: {"vars": {...}, "prompt": {...}, ...}
+
+    # Return bool, float (0-1), or a detailed result dict
+    topic = context["vars"]["topic"]
+    if topic.lower() not in output.lower():
+        return {
+            "pass": False,
+            "score": 0,
+            "reason": f"Output does not mention the topic: {topic}",
+        }
+    return {"pass": True, "score": 1.0}
+```
+
+You can also reference a specific function name:
+
+```yaml
+assert:
+  - type: python
+    value: file://assert.py:check_safety
+```
+
+## Test generators
+
+Load or generate test cases dynamically from Python:
+
+```yaml
+tests:
+  - file://tests.py:generate_tests
+```
+
+```python
+def generate_tests(config=None):
+    # Load from a database, API, CSV, or generate programmatically
+    return [
+        {
+            "vars": {"input": "test 1"},
+            "assert": [{"type": "contains", "value": "expected output"}],
+        },
+        {
+            "vars": {"input": "test 2"},
+        },
+    ]
+```
+
+Pass configuration from YAML to control generator behavior:
+
+```yaml
+tests:
+  - path: file://tests.py:generate_tests
+    config:
+      max_cases: 100
+      category: 'safety'
+```
+
+```python
+def generate_tests(config=None):
+    max_cases = config.get("max_cases", 50) if config else 50
+    category = config.get("category", "general") if config else "general"
+    # ... generate and return test cases
+```
+
+## Prompts
+
+Build prompts dynamically based on test variables:
+
+```yaml
+prompts:
+  - file://prompts.py:create_prompt
+```
+
+```python
+def create_prompt(context):
+    # Return a string or a list of chat messages
+    return [
+        {"role": "system", "content": "You are an expert assistant."},
+        {"role": "user", "content": f"Explain {context['vars']['topic']}"},
+    ]
+```
+
+## Framework integrations
+
+Wrap any Python agent framework as a provider:
+
+| Framework | Example slug | Notes |
+|-----------|-------------|-------|
+| **LangGraph** | `integration-langgraph` | Multi-agent graph workflows |
+| **LangChain** | `integration-langchain` | LLM chains and retrievers |
+| **CrewAI** | `integration-crewai` | Role-based multi-agent tasks |
+| **OpenAI Agents** | `openai-agents` | OpenAI Agents Python SDK |
+| **PydanticAI** | `integration-pydantic-ai` | Type-safe agents with Pydantic |
+| **Google ADK** | `integration-google-adk` | Google Agent Development Kit |
+| **Strands Agents** | `integration-strands-agents` | AWS open-source agent framework |
+
+Initialize any example locally:
+
+```bash
+npx promptfoo@latest init --example integration-langgraph
+```
+
+## Jupyter / Colab
+
+Run promptfoo evals from a Jupyter or Colab notebook:
+
+```python
+# Install
+!npm install -g promptfoo
+
+# Create config
+%%writefile promptfooconfig.yaml
+prompts:
+  - "Explain {{topic}}"
+providers:
+  - openai:gpt-4.1-mini
+tests:
+  - vars:
+      topic: machine learning
+
+# Run
+!npx promptfoo eval
+```
+
+## Configuration
+
+### Python executable
+
+Set a custom Python path:
+
+```bash
+export PROMPTFOO_PYTHON=/path/to/python3
+```
+
+Or configure per-provider in YAML:
+
+```yaml
+providers:
+  - id: file://provider.py
+    config:
+      pythonExecutable: ./venv/bin/python
+```
+
+### Module paths
+
+Add directories to the Python module search path:
+
+```bash
+export PYTHONPATH=/path/to/modules:$PYTHONPATH
+```
+
+### Debug output
+
+Enable detailed logging to see Python execution details:
+
+```bash
+LOG_LEVEL=debug npx promptfoo eval
+```
+
+## Related
+
+- [Python provider documentation](/providers/custom)
+- [Assertions and metrics](/configuration/expected-outputs)
+- [Test case configuration](/configuration/test-cases)

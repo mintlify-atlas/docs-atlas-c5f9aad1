@@ -1,0 +1,131 @@
+---
+title: "Azure OpenAI provider configuration"
+description: "Configure Azure-hosted OpenAI deployments in Promptfoo with API key, service principal, or Azure CLI authentication and support for GPT-4o and reasoning models."
+---
+
+The `azure` provider connects Promptfoo to Azure OpenAI Service deployments. It supports the same model capabilities as the OpenAI provider and adds Azure-specific authentication options including service principal (Entra ID) auth.
+
+## Authentication
+
+Azure OpenAI supports three authentication methods.
+
+### Option 1: API key
+
+Set `AZURE_API_KEY` and configure your deployment host:
+
+```yaml
+providers:
+  - id: azure:chat:my-gpt4o-deployment
+    config:
+      apiHost: myworkspace.openai.azure.com
+```
+
+```bash
+export AZURE_API_KEY=...
+```
+
+### Option 2: Service principal (recommended for production)
+
+Use an Azure Entra ID service principal instead of an API key:
+
+```bash
+export AZURE_CLIENT_ID=your-client-id
+export AZURE_CLIENT_SECRET=your-client-secret
+export AZURE_TENANT_ID=your-tenant-id
+```
+
+```yaml
+providers:
+  - id: azure:chat:my-gpt4o-deployment
+    config:
+      apiHost: myworkspace.openai.azure.com
+```
+
+<Tip>
+The service principal must have the **Cognitive Services OpenAI User** role on your Azure OpenAI resource. Assign it in the Azure Portal under **Access control (IAM)**.
+</Tip>
+
+### Option 3: Azure CLI
+
+Run `az login` before running Promptfoo. This is the fallback when no API key or service principal is configured.
+
+## Provider types
+
+| Format | Description |
+|---|---|
+| `azure:chat:<deployment>` | Chat completions (GPT-4o, GPT-5, GPT-4.1) |
+| `azure:completion:<deployment>` | Legacy completions (gpt-35-turbo-instruct) |
+| `azure:embedding:<deployment>` | Embeddings (text-embedding-3-small) |
+| `azure:responses:<deployment>` | Responses API (GPT-4.1, GPT-5.1) |
+| `azure:assistant:<id>` | Azure OpenAI Assistants |
+
+## Basic configuration
+
+```yaml title="promptfooconfig.yaml"
+providers:
+  - id: azure:chat:my-gpt4o-deployment
+    config:
+      apiHost: myworkspace.openai.azure.com
+      temperature: 0.7
+      max_tokens: 1024
+```
+
+## API version
+
+The default API version is set automatically. To pin a specific version:
+
+```yaml
+providers:
+  - id: azure:chat:my-gpt4o-deployment
+    config:
+      apiHost: myworkspace.openai.azure.com
+      apiVersion: "2025-01-01-preview"
+```
+
+You can also set it via the environment variable:
+
+```bash
+export AZURE_OPENAI_API_VERSION=2025-01-01-preview
+```
+
+## Reasoning models
+
+For o-series or GPT-5 family deployments on Azure, use `max_completion_tokens`:
+
+```yaml
+providers:
+  - id: azure:chat:my-o3-deployment
+    config:
+      apiHost: myworkspace.openai.azure.com
+      max_completion_tokens: 4096
+```
+
+## Using Claude models via Azure AI Foundry
+
+Azure AI Foundry hosts Claude models under a different endpoint. Use the standard `anthropic:messages:` provider with a custom `apiBaseUrl`:
+
+```yaml
+providers:
+  - id: anthropic:messages:claude-opus-4-6-20260205
+    config:
+      apiBaseUrl: https://myworkspace.services.ai.azure.com/models
+      apiKey: your-azure-ai-foundry-key
+```
+
+## Configuration reference
+
+| Parameter | Environment variable | Description |
+|---|---|---|
+| `apiHost` | `AZURE_OPENAI_API_HOST` | Azure OpenAI resource hostname |
+| `apiBaseUrl` | `AZURE_OPENAI_BASE_URL` | Full base URL override |
+| `apiKey` | `AZURE_API_KEY` or `AZURE_OPENAI_API_KEY` | API key |
+| `apiVersion` | `AZURE_OPENAI_API_VERSION` | API version string |
+| `azureClientId` | `AZURE_CLIENT_ID` | Service principal client ID |
+| `azureClientSecret` | `AZURE_CLIENT_SECRET` | Service principal secret |
+| `azureTenantId` | `AZURE_TENANT_ID` | Entra ID tenant ID |
+| `azureAuthorityHost` | `AZURE_AUTHORITY_HOST` | Auth endpoint (default: `https://login.microsoftonline.com`) |
+| `azureTokenScope` | `AZURE_TOKEN_SCOPE` | Token scope (default: `https://cognitiveservices.azure.com/.default`) |
+| `temperature` | — | Output randomness |
+| `max_tokens` | — | Max output tokens for non-reasoning models |
+| `max_completion_tokens` | — | Max tokens for reasoning/GPT-5 family models |
+| `headers` | — | Additional HTTP headers |

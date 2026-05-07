@@ -1,0 +1,62 @@
+---
+title: "Install Promptfoo"
+description: "Install the promptfoo CLI via npm, Homebrew, or pip, or run without installing via npx. Requires Node.js 20.20+ or 22.22+. Also available as a Node.js library."
+---
+
+Install the promptfoo CLI using any of the methods below. After installation, the `promptfoo` command (and its short alias `pf`) will be available in your terminal.
+
+## Install methods
+
+<CodeGroup>
+
+```bash npm (global)
+npm install -g promptfoo
+```
+
+```bash Homebrew (Mac / Linux)
+brew install promptfoo
+```
+
+```bash pip
+pip install promptfoo
+```
+
+```bash npx (no install)
+npx promptfoo@latest
+```
+
+</CodeGroup>
+
+<Note>
+  npm and npx require **Node.js `^20.20.0` or `>=22.22.0`**. Download Node.js from [nodejs.org](https://nodejs.org/en/download).
+</Note>
+
+### Use as a project library
+
+To use promptfoo programmatically inside a Node.js project:
+
+```bash
+npm install promptfoo --save
+```
+
+### Run without installing
+
+`npx promptfoo@latest` always pulls the latest published version and runs it directly—no global install required. Replace `promptfoo` with `npx promptfoo@latest` in any command when using this method.
+
+## Verify the installation
+
+After installing, confirm the CLI is available:
+
+```bash
+promptfoo --version
+```
+
+This prints the installed version number, for example `0.103.0`.
+
+<Tip>
+  `pf` is a built-in short alias for `promptfoo`. You can use `pf eval`, `pf view`, and any other command interchangeably.
+</Tip>
+
+## Next steps
+
+Once promptfoo is installed, follow the [quickstart](/quickstart) to run your first eval.

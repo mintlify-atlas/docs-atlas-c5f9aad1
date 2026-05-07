@@ -1,0 +1,246 @@
+---
+title: "NIST AI RMF alignment with Promptfoo"
+description: "Map Promptfoo red team plugins to NIST AI Risk Management Framework Measure categories for trustworthy AI testing aligned with federal guidelines."
+---
+
+The [NIST AI Risk Management Framework (AI RMF)](https://www.nist.gov/itl/ai-risk-management-framework) is a voluntary U.S. federal framework for managing AI risks throughout the system lifecycle. It organizes risk management into four core functions: **Govern**, **Map**, **Measure**, and **Manage**. Promptfoo's automated red teaming capabilities align most directly with the **Measure** function, which covers testing and evaluation of AI systems against specific risk criteria.
+
+## Running a NIST AI RMF scan
+
+Use the `nist:ai:measure` shorthand to cover all Measure subcategories:
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure
+  strategies:
+    - jailbreak:meta
+    - jailbreak-templates
+```
+
+Target specific measures individually using their dotted IDs:
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure:2.4   # Safety risks
+    - nist:ai:measure:2.7   # Security and resilience
+    - nist:ai:measure:2.11  # Fairness and bias
+```
+
+## MEASURE 1: Measurement approaches
+
+**1.1 & 1.2** — Appropriate measurement methods are selected, documented, and regularly reassessed.
+
+Tests that validate measurement appropriateness focus on whether the AI acts within its intended scope and produces reliable outputs.
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure:1.1
+    - nist:ai:measure:1.2
+    # Equivalent to:
+    - excessive-agency
+    - harmful:misinformation-disinformation
+```
+
+## MEASURE 2: AI system evaluation
+
+### 2.1 & 2.2 — Test documentation and evaluation context
+
+Testing procedures are documented and representative of the deployment context. Includes privacy in evaluation settings.
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure:2.1
+    - nist:ai:measure:2.2
+    # Equivalent to:
+    - harmful:privacy
+    - pii:api-db
+    - pii:direct
+    - pii:session
+    - pii:social
+```
+
+### 2.3 & 2.5 — Performance validation
+
+The AI system performs reliably under deployment-like conditions.
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure:2.3
+    - nist:ai:measure:2.5
+    # Equivalent to:
+    - excessive-agency
+```
+
+### 2.4 — Safety risk evaluation
+
+Regular evaluation of safety risks is among the most critical NIST Measure requirements.
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure:2.4
+    # Equivalent to:
+    - excessive-agency
+    - harmful:misinformation-disinformation
+  strategies:
+    - jailbreak:meta
+    - jailbreak-templates
+```
+
+### 2.6 — Misuse and abuse potential
+
+Tests whether the AI system could be directed toward harmful purposes.
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure:2.6
+    # Equivalent to:
+    - harmful:chemical-biological-weapons
+    - harmful:indiscriminate-weapons
+    - harmful:unsafe-practices
+```
+
+### 2.7 — Security and resilience
+
+Cybersecurity vulnerabilities and system resilience against injection and exploitation attacks.
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure:2.7
+    # Equivalent to:
+    - harmful:cybercrime
+    - shell-injection
+    - sql-injection
+  strategies:
+    - jailbreak:meta
+    - jailbreak-templates
+```
+
+### 2.8 — Privacy and data protection
+
+Access control misconfigurations and unauthorized data exposure.
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure:2.8
+    # Equivalent to:
+    - bfla
+    - bola
+    - rbac
+```
+
+### 2.9 & 2.13 — Risk assessment and transparency
+
+Documenting risk values and evaluating the effectiveness of transparency mechanisms.
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure:2.9
+    - nist:ai:measure:2.13
+    # Equivalent to:
+    - excessive-agency
+```
+
+### 2.10 — Privacy risk assessment
+
+Specific privacy risk evaluation beyond general data protection.
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure:2.10
+    # Equivalent to:
+    - harmful:privacy
+    - pii:api-db
+    - pii:direct
+    - pii:session
+    - pii:social
+```
+
+### 2.11 — Fairness and bias
+
+Evaluates AI systems for discriminatory behavior and outputs.
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure:2.11
+    # Equivalent to:
+    - harmful:harassment-bullying
+    - harmful:hate
+    - harmful:insults
+```
+
+## MEASURE 3: Risk tracking
+
+**3.1–3.3** — Ongoing risk identification, tracking in difficult-to-assess settings, and stakeholder feedback integration.
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure:3.1
+    - nist:ai:measure:3.2
+    - nist:ai:measure:3.3
+    # Equivalent to:
+    - excessive-agency
+    - harmful:misinformation-disinformation
+```
+
+## MEASURE 4: Impact measurement
+
+**4.1–4.3** — Measurable performance changes connected to business value and sustainability criteria.
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure:4.1
+    - nist:ai:measure:4.2
+    - nist:ai:measure:4.3
+```
+
+## Measure-to-plugin reference
+
+| NIST Measure | Focus area | Key plugins |
+|---|---|---|
+| 1.1, 1.2 | Measurement approaches | `excessive-agency`, `harmful:misinformation-disinformation` |
+| 2.1, 2.2 | Test documentation | `harmful:privacy`, `pii:*` |
+| 2.4 | Safety risks | `excessive-agency`, `harmful:misinformation-disinformation` |
+| 2.6 | Misuse potential | `harmful:chemical-biological-weapons`, `harmful:unsafe-practices` |
+| 2.7 | Security & resilience | `harmful:cybercrime`, `shell-injection`, `sql-injection` |
+| 2.8 | Privacy & access control | `bfla`, `bola`, `rbac` |
+| 2.10 | Privacy risk | `harmful:privacy`, `pii:*` |
+| 2.11 | Fairness & bias | `harmful:hate`, `harmful:harassment-bullying` |
+
+## Combining with other frameworks
+
+NIST AI RMF testing can be combined with OWASP LLM Top 10 and EU AI Act scans in a single configuration:
+
+```yaml
+redteam:
+  plugins:
+    - nist:ai:measure
+    - owasp:llm
+  strategies:
+    - jailbreak:meta
+    - jailbreak:composite
+    - jailbreak-templates
+```
+
+<Note>
+Some NIST requirements — such as MEASURE 2.12 (environmental impact) and MEASURE 3.3 (stakeholder feedback processes) — require organizational procedures beyond what automated red teaming can address. Automated testing should be part of a broader compliance program.
+</Note>
+
+## Related
+
+- [OWASP LLM Top 10 coverage](/red-team/owasp-llm-top-10)
+- [EU AI Act compliance](/red-team/eu-ai-act)
+- [Red team strategies overview](/red-team/strategies/overview)

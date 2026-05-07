@@ -1,0 +1,228 @@
+---
+title: "Model Context Protocol (MCP) integration"
+description: "Connect promptfoo providers to MCP servers for tool use, persistent memory, and agentic workflows across OpenAI, Anthropic, and Google providers."
+---
+
+The [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) is an open standard for connecting LLMs to external tools and data sources. Promptfoo supports MCP natively, letting you evaluate providers that use tools like memory storage, filesystem access, web search, and custom APIs — and compare their behavior across models in a single eval run.
+
+## Why MCP matters for evals
+
+When you're evaluating an AI application that relies on tools, you need your evals to exercise the full tool-calling pipeline — not just the model in isolation. MCP makes this possible by exposing a standardized tool interface that promptfoo providers can call during eval runs. This lets you test whether your model correctly uses tools, handles tool errors gracefully, and produces quality outputs in agentic workflows.
+
+## Basic configuration
+
+Add an `mcp` block to any provider's `config` in your `promptfooconfig.yaml`:
+
+```yaml
+description: Testing MCP memory server integration with Google AI Studio
+providers:
+  - id: google:gemini-2.0-flash
+    config:
+      mcp:
+        enabled: true
+        server:
+          command: npx
+          args: ['-y', '@modelcontextprotocol/server-memory']
+          name: memory
+```
+
+This launches a local MCP memory server and makes its tools available to the Gemini provider during the eval.
+
+## Configuration options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `enabled` | boolean | Set to `true` to enable MCP for this provider. |
+| `server` | object | Configuration for a single MCP server (local or remote). |
+| `servers` | array | Configuration for multiple MCP servers. |
+| `timeout` | number | Request timeout in milliseconds. Default: 60000. |
+| `resetTimeoutOnProgress` | boolean | Reset timeout on progress notifications. Default: false. |
+| `maxTotalTimeout` | number | Absolute maximum timeout regardless of progress. |
+| `pingOnConnect` | boolean | Ping the server after connecting to verify it's responsive. Default: false. |
+
+### Server options
+
+| Option | Description |
+|--------|-------------|
+| `command` | Command to launch a local MCP server (e.g., `npx`). |
+| `args` | Arguments to pass to the command. |
+| `name` | Optional name for the server instance. |
+| `url` | URL for connecting to a remote MCP server. |
+| `headers` | Custom HTTP headers to send (only for URL-based connections). |
+| `auth` | Authentication config. Supports `type: bearer` or `type: api_key`. |
+
+## Connecting to a remote server
+
+```yaml
+providers:
+  - id: openai:responses:gpt-5.1
+    config:
+      mcp:
+        enabled: true
+        server:
+          url: http://localhost:8000
+```
+
+## Custom headers for authentication
+
+```yaml
+providers:
+  - id: openai:responses:gpt-5.1
+    config:
+      mcp:
+        enabled: true
+        server:
+          url: http://localhost:8000
+          headers:
+            X-API-Key: your-custom-api-key
+            Authorization: Bearer your-token
+```
+
+## Connecting one provider to multiple servers
+
+Use the `servers` array to connect a single provider to multiple MCP servers. All tools from all servers will be available to the provider:
+
+```yaml
+providers:
+  - id: anthropic:claude-sonnet-4-5-20250929
+    config:
+      mcp:
+        enabled: true
+        servers:
+          - command: npx
+            args: ['-y', '@modelcontextprotocol/server-memory']
+            name: memory
+          - command: npx
+            args: ['-y', '@modelcontextprotocol/server-filesystem']
+            name: filesystem
+          - command: npx
+            args: ['-y', '@modelcontextprotocol/server-github']
+            name: github
+```
+
+You can also mix local and remote servers:
+
+```yaml
+providers:
+  - id: openai:responses:gpt-5.1
+    config:
+      mcp:
+        enabled: true
+        servers:
+          - command: npx
+            args: ['-y', '@modelcontextprotocol/server-memory']
+            name: server_a
+          - url: http://localhost:8001
+            name: server_b
+            headers:
+              X-API-Key: your-api-key
+```
+
+## Comparing providers with different MCP servers
+
+Assign different MCP configurations to different providers in a single eval to benchmark them side by side:
+
+```yaml
+description: Comparing models with isolated MCP servers
+providers:
+  - id: google:gemini-2.0-flash
+    config:
+      mcp:
+        enabled: true
+        server:
+          command: npx
+          args: ['-y', '@modelcontextprotocol/server-memory']
+          name: gemini-memory
+
+  - id: openai:responses:gpt-5.1
+    config:
+      mcp:
+        enabled: true
+        server:
+          url: http://localhost:8001
+          name: openai-memory
+          headers:
+            X-API-Key: openai-server-api-key
+
+  - id: anthropic:claude-sonnet-4-5-20250929
+    config:
+      mcp:
+        enabled: true
+        server:
+          url: http://localhost:8002
+          name: anthropic-memory
+          headers:
+            Authorization: Bearer anthropic-server-token
+```
+
+Each provider gets its own isolated MCP context, which is useful for benchmarking or running parallel agentic workflows.
+
+## Supported providers
+
+MCP is supported by the following providers in promptfoo:
+
+- **Google Gemini** (AI Studio and Vertex)
+- **OpenAI** (and compatible providers like Groq, Together)
+- **Anthropic**
+
+## OpenAI Responses API native MCP
+
+OpenAI's Responses API has native MCP support that connects directly to remote servers without running a local process:
+
+```yaml
+providers:
+  - id: openai:responses:gpt-5.1
+    config:
+      mcp:
+        enabled: true
+        server:
+          url: https://mcp.deepwiki.com/mcp
+```
+
+This supports built-in approval workflows, authentication headers, and tool filtering. See the [OpenAI provider documentation](/providers/openai) for details.
+
+## Timeout configuration
+
+MCP tool calls default to a 60-second timeout. Increase it for long-running tools:
+
+```yaml
+providers:
+  - id: openai:responses:gpt-5.1
+    config:
+      mcp:
+        enabled: true
+        timeout: 900000 # 15 minutes
+        server:
+          url: https://api.example.com/mcp
+```
+
+You can also set a global default via environment variable:
+
+```bash
+export MCP_REQUEST_TIMEOUT_MS=900000
+```
+
+Priority order: `config.timeout` > `MCP_REQUEST_TIMEOUT_MS` > SDK default (60s).
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="MCP server fails to connect">
+    Verify the MCP server is running and accessible before starting the eval. For local servers using `command`, check that the required npm packages are installed. For remote servers, confirm the URL is reachable from your network.
+  </Accordion>
+  <Accordion title="Tool calls are timing out">
+    Increase the `timeout` config option or set the `MCP_REQUEST_TIMEOUT_MS` environment variable. For tools that report progress, set `resetTimeoutOnProgress: true`.
+  </Accordion>
+  <Accordion title="Authentication errors with remote servers">
+    Check that your `headers` config is correctly formatted. Bearer tokens go in the `Authorization` header as `Bearer <token>`. API keys typically go in a custom header like `X-API-Key`.
+  </Accordion>
+  <Accordion title="Tool schema compatibility issues">
+    Promptfoo automatically strips provider-incompatible JSON Schema fields (like `$schema`) from MCP tool definitions. If you're still seeing errors, check the provider's tool schema requirements.
+  </Accordion>
+</AccordionGroup>
+
+## Related
+
+- [Configuration reference](/reference/configuration-schema)
+- [Providers overview](/providers/overview)
+- [MCP security testing](/red-team/introduction)

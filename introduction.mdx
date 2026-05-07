@@ -1,0 +1,66 @@
+---
+title: "Promptfoo: LLM evals and red teaming toolkit"
+description: "Promptfoo is an open-source CLI and library for evaluating and red-teaming LLM apps. Compare models, automate tests, and ship secure AI."
+---
+
+Promptfoo is an open-source CLI and library for evaluating and red-teaming LLM applications. It gives you a systematic, data-driven way to test prompts and models—so you can stop guessing and start shipping reliable, secure AI.
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Run your first eval in under five minutes.
+  </Card>
+  <Card title="Red teaming" icon="shield" href="/red-team/introduction">
+    Scan your LLM app for security vulnerabilities.
+  </Card>
+  <Card title="Providers" icon="plug" href="/providers/overview">
+    Browse all 80+ supported models and APIs.
+  </Card>
+  <Card title="CLI reference" icon="terminal" href="/reference/cli">
+    Full command-line reference for promptfoo.
+  </Card>
+</CardGroup>
+
+## What you can do with promptfoo
+
+- **Evaluate prompts and models** — Run automated evals across any combination of prompts, models, and test cases. Review results in a terminal table or interactive web UI.
+- **Red-team LLM apps** — Automatically probe your application for jailbreaks, prompt injections, data leakage, and other security vulnerabilities.
+- **Compare models side-by-side** — Benchmark OpenAI, Anthropic, Google, Azure, Bedrock, Ollama, and [80+ other providers](/providers/overview) against each other on your own test cases.
+- **Automate in CI/CD** — Run evals on every pull request to catch regressions before they reach production.
+- **Score outputs automatically** — Define assertions (contains, regex, LLM-graded rubric, cost, latency, and more) that pass or fail each model response.
+
+## Why promptfoo?
+
+| Property | Detail |
+|---|---|
+| **License** | MIT — free to use, modify, and self-host |
+| **Privacy** | Evals run 100% locally; your prompts never leave your machine |
+| **Language support** | Works with any LLM API, Python, JavaScript, or custom provider |
+| **Trusted by** | Teams at OpenAI, Anthropic, and production apps serving 10M+ users |
+
+<Note>
+  Promptfoo is now part of OpenAI. It remains open source and MIT licensed. Read the [company update](https://www.promptfoo.dev/blog/promptfoo-joining-openai/).
+</Note>
+
+## How it works
+
+Promptfoo uses a declarative YAML configuration file (`promptfooconfig.yaml`) to define your prompts, providers, and test cases. When you run `promptfoo eval`, it executes every combination and checks each output against your assertions.
+
+```yaml
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+prompts:
+  - 'Convert the following English text to {{language}}: {{input}}'
+
+providers:
+  - openai:chat:gpt-5.5
+  - openai:chat:gpt-5.4-mini
+
+tests:
+  - vars:
+      language: French
+      input: Hello world
+    assert:
+      - type: contains
+        value: 'Bonjour le monde'
+```
+
+Results appear in your terminal as a pass/fail matrix and are stored locally so you can open them in the web UI at any time with `promptfoo view`.

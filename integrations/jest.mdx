@@ -1,0 +1,241 @@
+---
+title: "Running Promptfoo evals in Jest tests"
+description: "Integrate promptfoo with Jest or Vitest to add toMatchSemanticSimilarity and toPassLLMRubric custom matchers for LLM output validation in your test suite."
+---
+
+Promptfoo integrates with [Jest](https://jestjs.io/) and [Vitest](https://vitest.dev/) through custom matchers, letting you evaluate LLM outputs as part of your existing test workflow. Use semantic similarity checks and LLM-graded rubrics alongside your regular unit tests.
+
+## Installation
+
+```bash
+npm install --save-dev jest promptfoo
+# or for Vitest
+npm install --save-dev vitest promptfoo
+```
+
+## Creating custom matchers
+
+Create a `matchers.ts` (or `matchers.js`) file to define the custom Jest matchers:
+
+<CodeGroup>
+
+```typescript matchers.ts
+import { assertions } from 'promptfoo';
+import type { GradingConfig } from 'promptfoo';
+
+const { matchesSimilarity, matchesLlmRubric } = assertions;
+
+declare global {
+  namespace jest {
+    interface Matchers<R> {
+      toMatchSemanticSimilarity(expected: string, threshold?: number): R;
+      toPassLLMRubric(expected: string, gradingConfig: GradingConfig): R;
+    }
+  }
+}
+
+export function installMatchers() {
+  expect.extend({
+    async toMatchSemanticSimilarity(
+      received: string,
+      expected: string,
+      threshold: number = 0.8,
+    ): Promise<jest.CustomMatcherResult> {
+      const result = await matchesSimilarity(received, expected, threshold);
+      const pass = received === expected || result.pass;
+      if (pass) {
+        return {
+          message: () => `expected ${received} not to match semantic similarity with ${expected}`,
+          pass: true,
+        };
+      } else {
+        return {
+          message: () =>
+            `expected ${received} to match semantic similarity with ${expected}, but it did not. Reason: ${result.reason}`,
+          pass: false,
+        };
+      }
+    },
+
+    async toPassLLMRubric(
+      received: string,
+      expected: string,
+      gradingConfig: GradingConfig,
+    ): Promise<jest.CustomMatcherResult> {
+      const gradingResult = await matchesLlmRubric(expected, received, gradingConfig);
+      if (gradingResult.pass) {
+        return {
+          message: () => `expected ${received} not to pass LLM Rubric with ${expected}`,
+          pass: true,
+        };
+      } else {
+        return {
+          message: () =>
+            `expected ${received} to pass LLM Rubric with ${expected}, but it did not. Reason: ${gradingResult.reason}`,
+          pass: false,
+        };
+      }
+    },
+  });
+}
+```
+
+```javascript matchers.js
+import { assertions } from 'promptfoo';
+
+const { matchesSimilarity, matchesLlmRubric } = assertions;
+
+export function installMatchers() {
+  expect.extend({
+    async toMatchSemanticSimilarity(received, expected, threshold = 0.8) {
+      const result = await matchesSimilarity(received, expected, threshold);
+      const pass = received === expected || result.pass;
+      if (pass) {
+        return {
+          message: () => `expected ${received} not to match semantic similarity with ${expected}`,
+          pass: true,
+        };
+      } else {
+        return {
+          message: () =>
+            `expected ${received} to match semantic similarity with ${expected}, but it did not. Reason: ${result.reason}`,
+          pass: false,
+        };
+      }
+    },
+
+    async toPassLLMRubric(received, expected, gradingConfig) {
+      const gradingResult = await matchesLlmRubric(expected, received, gradingConfig);
+      if (gradingResult.pass) {
+        return {
+          message: () => `expected ${received} not to pass LLM Rubric with ${expected}`,
+          pass: true,
+        };
+      } else {
+        return {
+          message: () =>
+            `expected ${received} to pass LLM Rubric with ${expected}, but it did not. Reason: ${gradingResult.reason}`,
+          pass: false,
+        };
+      }
+    },
+  });
+}
+```
+
+</CodeGroup>
+
+The available matchers are:
+
+- `toMatchSemanticSimilarity` — compares two strings using embedding-based similarity
+- `toPassLLMRubric` — grades a string against a natural language rubric using an LLM
+
+## Writing tests
+
+Create a test file that installs the matchers and runs assertions:
+
+```typescript
+import { installMatchers } from './matchers';
+import type { GradingConfig } from 'promptfoo';
+
+installMatchers();
+
+const gradingConfig: GradingConfig = {
+  provider: 'openai:chat:gpt-4.1-mini',
+};
+
+describe('toMatchSemanticSimilarity', () => {
+  it('should pass when strings are semantically similar', async () => {
+    await expect('The quick brown fox').toMatchSemanticSimilarity('A fast brown fox');
+  });
+
+  it('should fail when strings are not semantically similar', async () => {
+    await expect('The quick brown fox').not.toMatchSemanticSimilarity('The weather is nice today');
+  });
+
+  it('should pass with a custom threshold', async () => {
+    await expect('The quick brown fox').toMatchSemanticSimilarity('A fast brown fox', 0.7);
+  });
+
+  it('should fail when similarity falls below a strict threshold', async () => {
+    await expect('The quick brown fox').not.toMatchSemanticSimilarity(
+      'The weather is nice today',
+      0.9,
+    );
+  });
+});
+
+describe('toPassLLMRubric', () => {
+  it('should pass when the string meets the rubric', async () => {
+    await expect('Four score and seven years ago').toPassLLMRubric(
+      'Contains part of a famous speech',
+      gradingConfig,
+    );
+  });
+
+  it('should fail when the string does not meet the rubric', async () => {
+    await expect('It is time to do laundry').not.toPassLLMRubric(
+      'Contains part of a famous speech',
+      gradingConfig,
+    );
+  });
+});
+```
+
+## Running the tests
+
+Add a test script to `package.json`:
+
+```json
+{
+  "scripts": {
+    "test": "jest",
+    "test:vitest": "vitest"
+  }
+}
+```
+
+Then run:
+
+```bash
+npm test
+```
+
+<Note>
+The default semantic similarity matcher uses the OpenAI embeddings API. Set the `OPENAI_API_KEY` environment variable before running tests, or configure an alternative provider in the `gradingConfig`.
+</Note>
+
+## Vitest configuration
+
+The same matchers work with Vitest. Create a `vitest.config.js`:
+
+```javascript
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    globals: true,
+  },
+});
+```
+
+Then run:
+
+```bash
+npx vitest
+```
+
+## Available matchers
+
+| Matcher | Description |
+|---------|-------------|
+| `toMatchSemanticSimilarity(expected, threshold?)` | Passes when embedding cosine similarity exceeds threshold (default: 0.8) |
+| `toPassLLMRubric(rubric, gradingConfig)` | Passes when an LLM grades the output as meeting the rubric criteria |
+
+For the full list of assertion types available in promptfoo, see the [assertions documentation](/configuration/expected-outputs).
+
+## Related
+
+- [CI/CD integration](/integrations/ci-cd)
+- [Assertions and metrics](/configuration/expected-outputs)
+- [Full example on GitHub](https://github.com/promptfoo/promptfoo/tree/main/examples/integration-jest)

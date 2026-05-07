@@ -1,0 +1,348 @@
+---
+title: "Promptfoo Node.js API reference"
+description: "Complete reference for the promptfoo Node.js package, including evaluate(), loadApiProvider, redteam, assertions, cache, and guardrails APIs."
+---
+
+The promptfoo Node.js package exposes the full evaluation engine for use in TypeScript and JavaScript projects. Use it to run evaluations programmatically, load providers, execute red team runs, and integrate assertion logic directly into your code.
+
+## Installation
+
+```bash
+npm install promptfoo
+```
+
+## Main exports
+
+```typescript
+import promptfoo, {
+  evaluate,
+  loadApiProvider,
+  loadApiProviders,
+  assertions,
+  cache,
+  guardrails,
+  redteam,
+} from 'promptfoo';
+```
+
+---
+
+## `evaluate(testSuite, options?)`
+
+The main entry point for running evaluations programmatically.
+
+```typescript
+async function evaluate(
+  testSuite: EvaluateTestSuite,
+  options?: EvaluateOptions
+): Promise<Eval>;
+```
+
+Returns an `Eval` record. Call `.toEvaluateSummary()` on it to get the serializable results summary.
+
+### `EvaluateTestSuite`
+
+<ResponseField name="prompts" type="string | string[] | Prompt[]" required>
+  One or more prompt strings, file paths, or prompt objects with `id`, `label`, and `raw` fields.
+</ResponseField>
+
+<ResponseField name="providers" type="string[] | ProviderOptions[] | ApiProvider[]" required>
+  LLM providers to test. Accepts identifier strings (e.g. `"openai:gpt-4.1"`), config objects, or `ApiProvider` instances.
+</ResponseField>
+
+<ResponseField name="tests" type="TestCase[]">
+  Array of test cases. Each test can have `vars`, `assert`, `description`, `threshold`, and `options`.
+</ResponseField>
+
+<ResponseField name="defaultTest" type="Partial<TestCase>">
+  Default properties applied to every test case — useful for shared assertions or variables.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Human-readable label for this test suite.
+</ResponseField>
+
+<ResponseField name="outputPath" type="string | string[]">
+  File path(s) to write results. Supports `json`, `csv`, `yaml`, `html`, `junit.xml`, and more.
+</ResponseField>
+
+<ResponseField name="sharing" type="boolean">
+  Create a shareable URL after the eval completes.
+</ResponseField>
+
+<ResponseField name="env" type="Record<string, string>">
+  Environment variable overrides for the eval run.
+</ResponseField>
+
+<ResponseField name="extensions" type="string[]">
+  Extension hook files (`beforeAll`, `afterAll`, `beforeEach`, `afterEach`).
+</ResponseField>
+
+### `EvaluateOptions`
+
+<ResponseField name="maxConcurrency" type="number">
+  Maximum concurrent API calls. Defaults to `4`.
+</ResponseField>
+
+<ResponseField name="cache" type="boolean">
+  Whether to use disk cache. Defaults to `true`.
+</ResponseField>
+
+<ResponseField name="outputPath" type="string | string[]">
+  Output file path(s). Overrides `testSuite.outputPath`.
+</ResponseField>
+
+<ResponseField name="sharing" type="boolean">
+  Create a shareable URL. Overrides `testSuite.sharing`.
+</ResponseField>
+
+<ResponseField name="writeLatestResults" type="boolean">
+  Persist results so they appear in the web UI.
+</ResponseField>
+
+<ResponseField name="nunjucksFilters" type="Record<string, Function>">
+  Custom Nunjucks filter functions for template rendering.
+</ResponseField>
+
+<ResponseField name="onTestComplete" type="(result: EvaluateResult) => void">
+  Callback invoked after each individual test case completes. Use for streaming progress updates.
+</ResponseField>
+
+### `EvaluateSummary` (from `toEvaluateSummary()`)
+
+<ResponseField name="results" type="EvaluateResult[]">
+  Array of individual test results, one per prompt/provider/test combination.
+</ResponseField>
+
+<ResponseField name="stats" type="object">
+  Aggregate statistics: `successes`, `failures`, `errors`, `tokenUsage`.
+</ResponseField>
+
+<ResponseField name="table" type="EvaluateTable">
+  Table representation of results for display.
+</ResponseField>
+
+### Example
+
+```typescript
+import { evaluate } from 'promptfoo';
+
+const evalRecord = await evaluate(
+  {
+    prompts: ['Answer concisely: {{question}}'],
+    providers: ['openai:gpt-4.1', 'anthropic:messages:claude-opus-4-5'],
+    tests: [
+      {
+        vars: { question: 'What is the capital of France?' },
+        assert: [
+          { type: 'contains', value: 'Paris' },
+          { type: 'latency', threshold: 5000 },
+        ],
+      },
+      {
+        vars: { question: 'What is 2 + 2?' },
+        assert: [{ type: 'equals', value: '4' }],
+      },
+    ],
+    defaultTest: {
+      assert: [{ type: 'not-contains', value: 'I cannot help' }],
+    },
+  },
+  {
+    maxConcurrency: 4,
+    cache: true,
+    onTestComplete: (result) => {
+      console.log(`[${result.success ? 'PASS' : 'FAIL'}] ${result.description}`);
+    },
+  },
+);
+
+const summary = await evalRecord.toEvaluateSummary();
+console.log(`Passed: ${summary.stats.successes}/${summary.results.length}`);
+console.log(`Shareable URL: ${evalRecord.shareableUrl}`);
+```
+
+---
+
+## `loadApiProvider(providerPath, context?)`
+
+Load a single provider instance by path or identifier string.
+
+```typescript
+async function loadApiProvider(
+  providerPath: string,
+  context?: LoadApiProviderContext,
+): Promise<ApiProvider>;
+```
+
+<ResponseField name="providerPath" type="string" required>
+  Provider identifier. Examples: `"openai:gpt-4.1"`, `"anthropic:messages:claude-opus-4-5"`, `"file://./my-provider.js"`.
+</ResponseField>
+
+<ResponseField name="context.env" type="Record<string, string>">
+  Environment variable overrides for this provider instance.
+</ResponseField>
+
+<ResponseField name="context.options" type="ProviderOptions">
+  Additional provider configuration (API host, keys, model config, etc.).
+</ResponseField>
+
+### Supported provider prefixes
+
+| Prefix | Description |
+|---|---|
+| `openai:*` | OpenAI GPT models |
+| `anthropic:messages:*` | Anthropic Claude models |
+| `azure:chat:*` | Azure OpenAI |
+| `bedrock:*` | AWS Bedrock |
+| `vertex:*` | Google Vertex AI |
+| `cohere:*` | Cohere |
+| `replicate:*` | Replicate |
+| `huggingface:*` | Hugging Face |
+| `file://./path.js` | Custom file-based provider |
+
+```typescript
+import { loadApiProvider } from 'promptfoo';
+
+const provider = await loadApiProvider('openai:gpt-4.1', {
+  env: { OPENAI_API_KEY: process.env.MY_KEY },
+});
+
+const response = await provider.callApi('Hello, world!');
+console.log(response.output);
+```
+
+---
+
+## `loadApiProviders(providers, options?)`
+
+Load multiple providers in parallel. Accepts the same `ProvidersConfig` shape that `evaluate()` uses internally.
+
+```typescript
+async function loadApiProviders(
+  providers: ProvidersConfig,
+  options?: LoadApiProvidersOptions,
+): Promise<ApiProvider[]>;
+```
+
+---
+
+## `redteam`
+
+Namespace for adversarial red-team functionality.
+
+### `redteam.run(options)`
+
+Run a full red team evaluation against a target.
+
+```typescript
+async function redteam.run(options: RedteamRunOptions): Promise<void>;
+```
+
+### `redteam.generate(options)`
+
+Generate adversarial test cases from a red team config without running them.
+
+```typescript
+async function redteam.generate(options: RedteamGenerateOptions): Promise<void>;
+```
+
+### `redteam.Plugins`
+
+Map of all built-in red team plugin classes.
+
+### `redteam.Strategies`
+
+Map of all built-in red team strategy classes.
+
+### `redteam.Extractors`
+
+Utilities for extracting system purpose, entities, and MCP tool info from a target.
+
+```typescript
+const purpose = await redteam.Extractors.extractSystemPurpose({ provider });
+const entities = await redteam.Extractors.extractEntities({ provider });
+```
+
+---
+
+## `assertions`
+
+Namespace for running assertion checks programmatically.
+
+```typescript
+import { assertions } from 'promptfoo';
+```
+
+Use `assertions.runAssertions()` to evaluate a set of assertion objects against an output string without running a full eval.
+
+---
+
+## `cache`
+
+Namespace for managing the promptfoo disk cache.
+
+```typescript
+import { cache } from 'promptfoo';
+
+await cache.disableCache(); // disable for this process
+```
+
+---
+
+## `guardrails`
+
+Namespace for PII detection, harm classification, and moderation checks.
+
+```typescript
+import { guardrails } from 'promptfoo';
+```
+
+---
+
+## Complete TypeScript example
+
+```typescript
+import { evaluate, loadApiProvider } from 'promptfoo';
+import type { TestCase, EvaluateOptions } from 'promptfoo';
+
+const tests: TestCase[] = [
+  {
+    vars: { question: 'What is the capital of Germany?' },
+    assert: [
+      { type: 'contains', value: 'Berlin' },
+      { type: 'cost', threshold: 0.001 },
+    ],
+  },
+  {
+    vars: { question: 'Explain quantum entanglement in one sentence.' },
+    assert: [
+      {
+        type: 'llm-rubric',
+        value: 'The explanation is scientifically accurate and uses plain language.',
+      },
+    ],
+  },
+];
+
+const options: EvaluateOptions = {
+  maxConcurrency: 2,
+  cache: true,
+};
+
+const evalRecord = await evaluate(
+  {
+    prompts: ['{{question}}'],
+    providers: ['openai:gpt-4.1-mini'],
+    tests,
+    outputPath: 'results.json',
+  },
+  options,
+);
+
+const summary = await evalRecord.toEvaluateSummary();
+
+console.log(`Total: ${summary.results.length}`);
+console.log(`Passed: ${summary.stats.successes}`);
+console.log(`Failed: ${summary.stats.failures}`);
+```

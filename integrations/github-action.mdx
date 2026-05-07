@@ -1,0 +1,207 @@
+---
+title: "GitHub Action for Promptfoo LLM evals"
+description: "Automatically evaluate prompts on pull requests, post before/after comparisons as PR comments, and enforce quality gates using the promptfoo GitHub Action."
+---
+
+The promptfoo GitHub Action automatically runs LLM evaluations on every pull request that modifies your prompts. It compares the before and after versions, posts a summary comment with results, and links to an interactive diff in the web viewer.
+
+## Using the action
+
+Save the following workflow to `.github/workflows/promptfoo.yml` in your repository:
+
+```yaml
+name: Prompt Evaluation
+
+on:
+  pull_request:
+    paths:
+      - 'prompts/**'
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to post comments on pull requests
+      pull-requests: write
+    steps:
+      - name: Set up promptfoo cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/promptfoo
+          key: ${{ runner.os }}-promptfoo-v1
+          restore-keys: |
+            ${{ runner.os }}-promptfoo-
+
+      - name: Run promptfoo evaluation
+        uses: promptfoo/promptfoo-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          prompts: 'prompts/**/*.json'
+          config: 'prompts/promptfooconfig.yaml'
+          cache-path: ~/.cache/promptfoo
+```
+
+When a pull request modifies a file under `prompts/`, the action runs a full before/after comparison and posts the results as a PR comment.
+
+## Setting up secrets
+
+<Steps>
+  <Step title="Add your OpenAI API key">
+    Go to your repository's **Settings > Secrets and variables > Actions** and create a new secret named `OPENAI_API_KEY` with your API key value.
+
+    The `GITHUB_TOKEN` secret is provided automatically by GitHub and does not need to be added manually.
+  </Step>
+  <Step title="Configure paths">
+    Update the `paths` filter to match the directory where your prompts live. Also update the `prompts` and `config` inputs in the action step to point to your prompt files and configuration.
+  </Step>
+  <Step title="Save the workflow file">
+    GitHub automatically picks up workflow files in `.github/workflows/`. Commit and push the file to enable the action.
+  </Step>
+</Steps>
+
+## Action parameters
+
+| Parameter | Description | Required |
+|-----------|-------------|----------|
+| `github-token` | GitHub token for posting PR comments. Use `${{ secrets.GITHUB_TOKEN }}`. | Yes |
+| `prompts` | Glob pattern for prompt files to evaluate. | Yes |
+| `config` | Path to the `promptfooconfig.yaml` configuration file. | Yes |
+| `openai-api-key` | OpenAI API key. Required when using OpenAI providers. | No |
+| `cache-path` | Path for storing cached LLM responses to reduce cost on repeat runs. | No |
+
+## How it works
+
+<Steps>
+  <Step title="Checkout both versions">
+    The action checks out the base branch (original) and the head branch (modified) so it can run a before/after comparison.
+  </Step>
+  <Step title="Run the evaluation">
+    promptfoo runs the eval against both versions of your prompts using the configuration in `promptfooconfig.yaml`.
+  </Step>
+  <Step title="Post PR comment">
+    Results are posted as a comment on the pull request, showing success/failure counts and a link to the interactive web viewer for detailed exploration.
+  </Step>
+</Steps>
+
+## Standalone action example
+
+For more control, you can run promptfoo directly without the packaged action. This example checks out both branches and compares them:
+
+```yaml
+name: LLM Prompt Evaluation
+
+on:
+  pull_request:
+    paths:
+      - 'prompts/**'
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout base ref (original)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+
+      - name: Checkout head ref (modified)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          path: head
+
+      - name: Cache promptfoo data
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/promptfoo
+          key: ${{ runner.os }}-promptfoo-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-promptfoo-
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run promptfoo evaluation
+        id: eval
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PROMPTFOO_CACHE_PATH: ~/.cache/promptfoo
+        run: |
+          npx promptfoo eval \
+            -c head/prompts/promptfooconfig.yaml \
+            --prompts base/prompts/prompt1.json head/prompts/prompt1.json \
+            -o output.json \
+            --share
+          echo "OUTPUT_JSON_PATH=$GITHUB_WORKSPACE/output.json" >> $GITHUB_ENV
+
+      - name: Comment PR
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const output = JSON.parse(fs.readFileSync(process.env.OUTPUT_JSON_PATH, 'utf8'));
+            const body = `LLM prompt was modified.\n\n| Success | Failure |\n|---------|---------|\n| ${output.results.stats.successes} | ${output.results.stats.failures} |\n\n[View eval results](${output.shareableUrl})`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+```
+
+## Red teaming in CI
+
+For security scans, embed more detailed reporting in your workflow:
+
+```yaml
+- name: Run promptfoo redteam
+  run: |
+    npx promptfoo@latest redteam run \
+      -c promptfooconfig.yaml \
+      -j 5 \
+      -o output.json || true
+    test -f output.json || { echo 'output.json not found'; exit 1; }
+
+- name: Build redteam summary
+  run: |
+    node .github/scripts/redteam-summary.js --input output.json --out comment.md
+```
+
+<Tip>
+To speed up builds, install promptfoo as a dev dependency instead of downloading it on every run:
+
+```bash
+npm install --save-dev promptfoo
+```
+
+Then use `actions/setup-node` with caching and `npm ci` before running evals.
+</Tip>
+
+## Caching
+
+The cache stores LLM responses so repeat runs reuse existing outputs rather than making new API calls. This reduces cost and speeds up subsequent runs significantly. Set the cache path consistently across your cache and eval steps:
+
+```yaml
+- name: Set up promptfoo cache
+  uses: actions/cache@v4
+  with:
+    path: ~/.cache/promptfoo
+    key: ${{ runner.os }}-promptfoo-v1
+
+- name: Run evaluation
+  env:
+    PROMPTFOO_CACHE_PATH: ~/.cache/promptfoo
+  run: npx promptfoo@latest eval -c promptfooconfig.yaml
+```
+
+## Related
+
+- [CI/CD integration overview](/integrations/ci-cd)
+- [Getting started](/quickstart)
+- [Configuration guide](/configuration/guide)

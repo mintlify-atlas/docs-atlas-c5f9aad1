@@ -1,0 +1,340 @@
+---
+title: "Custom provider API for Promptfoo"
+description: "Build custom LLM providers in promptfoo using the ApiProvider interface. Covers ProviderResponse shape, context params, and wiring providers into YAML configs."
+---
+
+A custom provider lets you connect promptfoo to any LLM, API, or inference service. Implement the `ApiProvider` interface in a `.js` or `.ts` file and reference it from your configuration.
+
+## `ApiProvider` interface
+
+```typescript
+interface ApiProvider {
+  // Required: unique identifier string for this provider
+  id: () => string;
+
+  // Required: send a prompt to the model and return a response
+  callApi: (
+    prompt: string,
+    context?: CallApiContextParams,
+    options?: CallApiOptionsParams,
+  ) => Promise<ProviderResponse>;
+
+  // Optional: generate an embedding vector for the input string
+  callEmbeddingApi?: (input: string) => Promise<ProviderEmbeddingResponse>;
+
+  // Optional: classify the input into a set of labels
+  callClassificationApi?: (prompt: string) => Promise<ProviderClassificationResponse>;
+
+  // Optional: provider-level configuration object
+  config?: any;
+
+  // Optional: delay (ms) to apply after each call for this provider
+  delay?: number;
+
+  // Optional: short label for display in the results table
+  label?: string;
+
+  // Optional: output transform function or file path
+  transform?: string | TransformFunction;
+
+  // Optional: cleanup hook called at eval shutdown
+  cleanup?: () => void | Promise<void>;
+}
+```
+
+### Required methods
+
+<ParamField path="id()" type="() => string" required>
+  Returns a unique string identifier for this provider. Shown in the results table and used to filter tests. Must be stable across calls.
+
+  ```typescript
+  id() {
+    return 'my-custom-provider';
+  }
+  ```
+</ParamField>
+
+<ParamField path="callApi(prompt, context?, options?)" type="(prompt: string, context?: CallApiContextParams, options?: CallApiOptionsParams) => Promise<ProviderResponse>" required>
+  Called for each test case. Receives the rendered prompt string and optional context/options. Must return a `ProviderResponse`.
+
+  ```typescript
+  async callApi(prompt: string, context?: CallApiContextParams): Promise<ProviderResponse> {
+    const response = await myModel.complete(prompt);
+    return { output: response.text };
+  }
+  ```
+</ParamField>
+
+### Optional methods
+
+<ParamField path="callEmbeddingApi(input)" type="(input: string) => Promise<ProviderEmbeddingResponse>">
+  Called by `similar` assertions that need an embedding vector. Return `{ embedding: number[] }`.
+</ParamField>
+
+<ParamField path="callClassificationApi(prompt)" type="(prompt: string) => Promise<ProviderClassificationResponse>">
+  Called by `classifier` assertions. Return `{ classification: Record<string, number> }` mapping label names to scores.
+</ParamField>
+
+<ParamField path="cleanup()" type="() => void | Promise<void>">
+  Called once when the eval finishes. Use to close database connections, browser sessions, or worker processes.
+</ParamField>
+
+---
+
+## `CallApiContextParams`
+
+Context passed as the second argument to `callApi`. All fields are optional.
+
+<ResponseField name="prompt" type="Prompt" required>
+  The prompt object, including `raw` (original template) and `label`.
+</ResponseField>
+
+<ResponseField name="vars" type="Record<string, VarValue>">
+  Variable substitutions applied to this test case.
+</ResponseField>
+
+<ResponseField name="test" type="AtomicTestCase">
+  The complete test case object, including `assert`, `options`, and `metadata`.
+</ResponseField>
+
+<ResponseField name="filters" type="NunjucksFilterMap">
+  Custom Nunjucks filter functions registered for this eval.
+</ResponseField>
+
+<ResponseField name="debug" type="boolean">
+  Whether debug mode is active.
+</ResponseField>
+
+<ResponseField name="bustCache" type="boolean">
+  When `true`, skip the cache for this call.
+</ResponseField>
+
+<ResponseField name="traceparent" type="string">
+  W3C Trace Context `traceparent` header for distributed tracing.
+</ResponseField>
+
+<ResponseField name="evaluationId" type="string">
+  Unique ID of the current evaluation run.
+</ResponseField>
+
+<ResponseField name="testCaseId" type="string">
+  Unique ID of the current test case.
+</ResponseField>
+
+---
+
+## `CallApiOptionsParams`
+
+Options passed as the third argument to `callApi`.
+
+<ResponseField name="includeLogProbs" type="boolean">
+  When `true`, the provider should return log probabilities in `ProviderResponse.logProbs`.
+</ResponseField>
+
+<ResponseField name="abortSignal" type="AbortSignal">
+  Signal that can be used to abort an in-flight request.
+</ResponseField>
+
+---
+
+## `ProviderResponse`
+
+The object returned by `callApi`. Only `output` or `error` is required.
+
+<ResponseField name="output" type="string | object">
+  The model's response. Can be a string or a structured object (e.g. JSON).
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message if the call failed. When set, the test is marked as an error (not a failure).
+</ResponseField>
+
+<ResponseField name="tokenUsage" type="TokenUsage">
+  Token consumption for this call: `{ total, prompt, completion, cached? }`.
+</ResponseField>
+
+<ResponseField name="cost" type="number">
+  Total cost of the call in USD. Used by the `cost` assertion.
+</ResponseField>
+
+<ResponseField name="latencyMs" type="number">
+  Response latency in milliseconds. If not set, promptfoo measures it automatically.
+</ResponseField>
+
+<ResponseField name="logProbs" type="number[]">
+  Log probabilities from the model, if requested via `includeLogProbs`.
+</ResponseField>
+
+<ResponseField name="cached" type="boolean">
+  Whether this response was served from cache.
+</ResponseField>
+
+<ResponseField name="prompt" type="string | ChatMessage[]">
+  The actual prompt sent to the model, if the provider modified it before sending.
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  Arbitrary provider metadata (HTTP status, headers, etc.) stored with the result.
+</ResponseField>
+
+<ResponseField name="isRefusal" type="boolean">
+  Set to `true` when the model declined to answer. Used by the `is-refusal` assertion.
+</ResponseField>
+
+<ResponseField name="finishReason" type="string">
+  Model finish reason (e.g. `"stop"`, `"length"`, `"tool_calls"`). Used by `finish-reason` assertions.
+</ResponseField>
+
+<ResponseField name="sessionId" type="string">
+  Session identifier for multi-turn conversations.
+</ResponseField>
+
+---
+
+## Complete TypeScript example
+
+```typescript
+import type { ApiProvider, ProviderResponse, CallApiContextParams } from 'promptfoo';
+
+interface MyModelConfig {
+  endpoint: string;
+  apiKey: string;
+  maxTokens?: number;
+}
+
+export class MyCustomProvider implements ApiProvider {
+  private config: MyModelConfig;
+
+  constructor(config: MyModelConfig) {
+    this.config = config;
+  }
+
+  id(): string {
+    return 'my-custom-provider';
+  }
+
+  async callApi(
+    prompt: string,
+    context?: CallApiContextParams,
+  ): Promise<ProviderResponse> {
+    const start = Date.now();
+
+    try {
+      const res = await fetch(this.config.endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.config.apiKey}`,
+        },
+        body: JSON.stringify({
+          prompt,
+          max_tokens: this.config.maxTokens ?? 256,
+          // Pass through any test-level vars as context
+          context: context?.vars,
+        }),
+        signal: context ? undefined : undefined,
+      });
+
+      if (!res.ok) {
+        return { error: `HTTP ${res.status}: ${res.statusText}` };
+      }
+
+      const data = await res.json();
+
+      return {
+        output: data.text,
+        tokenUsage: {
+          total: data.usage?.total_tokens,
+          prompt: data.usage?.prompt_tokens,
+          completion: data.usage?.completion_tokens,
+        },
+        cost: data.usage?.cost_usd,
+        latencyMs: Date.now() - start,
+      };
+    } catch (err) {
+      return {
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  async callEmbeddingApi(input: string): Promise<{ embedding: number[] }> {
+    const res = await fetch(`${this.config.endpoint}/embed`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.config.apiKey}` },
+      body: JSON.stringify({ input }),
+    });
+    const data = await res.json();
+    return { embedding: data.embedding };
+  }
+
+  cleanup(): void {
+    // Close any persistent connections
+  }
+}
+
+// Export the provider class as the default export
+export default MyCustomProvider;
+```
+
+### Export as a factory function
+
+You can also export a factory function that receives `options` from the YAML config:
+
+```typescript
+// my-provider.ts
+export default function createProvider(options: { apiKey: string; model: string }) {
+  return new MyCustomProvider({
+    endpoint: `https://api.example.com/${options.model}`,
+    apiKey: options.apiKey,
+  });
+}
+```
+
+---
+
+## Using a custom provider in YAML
+
+Reference your compiled provider file with the `file://` prefix:
+
+```yaml
+providers:
+  - id: file://./dist/my-provider.js
+    label: My Custom Model
+    config:
+      endpoint: https://api.example.com/v1/generate
+      apiKey: ${MY_API_KEY}
+      maxTokens: 512
+```
+
+For TypeScript files during development, use `ts-node` or compile first:
+
+```yaml
+providers:
+  - id: file://./src/my-provider.ts
+```
+
+<Note>
+  promptfoo resolves `file://` paths relative to the config file location. Compiled JavaScript is recommended for production use.
+</Note>
+
+### Inline provider function
+
+For simple cases, pass an inline function when using the Node.js API:
+
+```typescript
+import { evaluate } from 'promptfoo';
+
+await evaluate({
+  prompts: ['{{question}}'],
+  providers: [
+    {
+      id: () => 'inline-provider',
+      callApi: async (prompt) => {
+        return { output: `Echo: ${prompt}` };
+      },
+    },
+  ],
+  tests: [{ vars: { question: 'Hello' } }],
+});
+```

@@ -1,0 +1,356 @@
+---
+title: "Defining prompts in Promptfoo"
+description: "Configure prompts for LLM evals using inline strings, text files, chat JSON, Nunjucks templates, JavaScript/Python functions, and multi-turn conversations."
+---
+
+Prompts define what you send to your LLMs. Promptfoo supports several formats — from a simple inline string to a dynamic JavaScript function that builds prompts at runtime. All prompts support [Nunjucks](https://mozilla.github.io/nunjucks/) variable substitution using values from your test cases.
+
+## Inline prompts
+
+The simplest form: define prompts directly in your config as strings.
+
+```yaml
+prompts:
+  - 'Translate the following text to {{language}}: {{input}}'
+  - 'Summarize this article: {{article}}'
+```
+
+For longer prompts, use YAML's block scalar syntax:
+
+```yaml
+prompts:
+  - |-
+    You are a helpful assistant.
+
+    Please answer the following question:
+    {{question}}
+
+    Provide a detailed explanation.
+```
+
+## Prompts from files
+
+Store prompts in external files for better organization and version control.
+
+<CodeGroup>
+
+```yaml promptfooconfig.yaml
+prompts:
+  - file://prompts/customer_service.txt
+  - file://prompts/technical_support.txt
+```
+
+```text prompts/customer_service.txt
+You are a friendly customer service representative for {{company}}.
+
+Customer query: {{query}}
+
+Please provide a helpful and professional response.
+```
+
+</CodeGroup>
+
+### Supported file formats
+
+| Format | Notes |
+|--------|-------|
+| `.txt` | Plain text with variable substitution |
+| `.md` | Markdown-formatted prompts |
+| `.j2` | Jinja2 templates |
+| `.json` | Chat conversation format (see below) |
+| `.csv` | Multiple prompts with labels |
+| `.js` / `.ts` | Dynamic prompt functions |
+| `.py` | Python prompt functions |
+
+### Multiple prompts in one file
+
+Separate multiple prompts in a single `.txt` file with `---`:
+
+```text
+Translate to French: {{text}}
+---
+Translate to Spanish: {{text}}
+---
+Translate to German: {{text}}
+```
+
+### Glob patterns
+
+Load multiple files at once:
+
+```yaml
+prompts:
+  - file://prompts/*.txt
+  - file://scenarios/**/*.json
+```
+
+## Nunjucks templating
+
+All prompts are processed as [Nunjucks](https://mozilla.github.io/nunjucks/) templates. Variables from test cases are substituted automatically.
+
+```yaml
+prompts:
+  - 'Hello {{name}}, welcome to {{company}}!'
+  - 'Product: {{product | upper}}'
+  - '{% if premium %}Priority support: {% endif %}{{issue}}'
+```
+
+### Object variables
+
+`vars` values can be nested objects. Access them with dot notation:
+
+```yaml
+tests:
+  - vars:
+      user_profile:
+        name: John Doe
+        interests:
+          - reading
+          - gaming
+```
+
+```text prompt.txt
+User: {{ user_profile.name }}
+Interests: {{ user_profile.interests | join(', ') }}
+```
+
+### Variable composition
+
+Variables can reference other variables:
+
+```yaml
+prompts:
+  - 'Write a {{item}}'
+
+tests:
+  - vars:
+      item: 'tweet about {{topic}}'
+      topic: 'bananas'
+```
+
+### Environment variables
+
+Access shell environment variables via the `env` global:
+
+```yaml
+prompts:
+  - 'file://{{ env.PROMPT_DIR }}/prompt.txt'
+```
+
+<Warning>
+  Environment variables are resolved at config load time, not at runtime. Only use them in trusted environments and avoid using them to pass secrets that could appear in exported results.
+</Warning>
+
+## Chat format (JSON)
+
+For multi-turn conversations and system messages, use JSON arrays with role-based message objects:
+
+<CodeGroup>
+
+```yaml promptfooconfig.yaml
+prompts:
+  - file://chat_prompt.json
+```
+
+```json chat_prompt.json
+[
+  {
+    "role": "system",
+    "content": "You are a helpful coding assistant."
+  },
+  {
+    "role": "user",
+    "content": "Write a function to {{task}}"
+  }
+]
+```
+
+</CodeGroup>
+
+### Multi-turn conversations
+
+Include prior assistant turns to test how the model continues a conversation:
+
+```json
+[
+  {
+    "role": "system",
+    "content": "You are a tutoring assistant."
+  },
+  {
+    "role": "user",
+    "content": "What is recursion?"
+  },
+  {
+    "role": "assistant",
+    "content": "Recursion is a programming technique where a function calls itself."
+  },
+  {
+    "role": "user",
+    "content": "Can you show me an example in {{language}}?"
+  }
+]
+```
+
+### Common patterns
+
+```json
+[
+  { "role": "system", "content": "You are {{role}}" },
+  { "role": "user", "content": "{{query}}" }
+]
+```
+
+## Prompt functions (JS/TS)
+
+Use JavaScript or TypeScript to build prompts dynamically with custom logic:
+
+<CodeGroup>
+
+```yaml promptfooconfig.yaml
+prompts:
+  - file://generate_prompt.js
+```
+
+```javascript generate_prompt.js
+module.exports = async function ({ vars, provider }) {
+  const topic = vars.topic;
+  const complexity = vars.complexity || 'medium';
+
+  if (complexity === 'simple') {
+    return `Explain ${topic} in simple terms.`;
+  } else {
+    return `Provide a detailed explanation of ${topic} with examples.`;
+  }
+};
+```
+
+</CodeGroup>
+
+Return both a prompt and provider configuration overrides by returning an object:
+
+```javascript
+module.exports = async function ({ vars }) {
+  const complexity = vars.complexity || 'medium';
+
+  return {
+    prompt: `Analyze ${vars.topic}`,
+    config: {
+      temperature: complexity === 'creative' ? 0.9 : 0.3,
+      max_tokens: complexity === 'detailed' ? 1000 : 200,
+    },
+  };
+};
+```
+
+## Prompt functions (Python)
+
+```yaml
+prompts:
+  - file://generate_prompt.py:create_prompt
+```
+
+```python
+def create_prompt(context):
+    vars = context['vars']
+    provider = context['provider']
+
+    if vars.get('technical_audience'):
+        return f"Provide a technical analysis of {vars['topic']}"
+    else:
+        return f"Explain {vars['topic']} for beginners"
+```
+
+## Model-specific prompts
+
+Assign different prompts to different providers using labels:
+
+```yaml
+prompts:
+  - id: file://prompts/gpt_prompt.json
+    label: gpt_prompt
+  - id: file://prompts/claude_prompt.txt
+    label: claude_prompt
+
+providers:
+  - id: openai:gpt-4
+    prompts: [gpt_prompt]
+  - id: anthropic:claude-3
+    prompts: [claude_prompt]
+```
+
+## External prompt management
+
+Promptfoo integrates with third-party prompt management platforms:
+
+<AccordionGroup>
+  <Accordion title="Langfuse">
+    ```yaml
+    prompts:
+      - langfuse://my-prompt@production
+      - langfuse://chat-prompt@staging:chat
+    ```
+  </Accordion>
+
+  <Accordion title="Portkey">
+    ```yaml
+    prompts:
+      - portkey://pp-customer-support-v2
+    ```
+  </Accordion>
+
+  <Accordion title="Helicone">
+    ```yaml
+    prompts:
+      - helicone://greeting-prompt:1.0
+    ```
+  </Accordion>
+</AccordionGroup>
+
+Variables from your test cases are automatically passed to these external prompts.
+
+## Custom Nunjucks filters
+
+Define reusable filter functions and reference them in prompts:
+
+<CodeGroup>
+
+```yaml promptfooconfig.yaml
+nunjucksFilters:
+  uppercaseFirst: ./uppercase_first.js
+
+prompts:
+  - 'Dear {{ name | uppercaseFirst }}, {{ message }}'
+```
+
+```javascript uppercase_first.js
+module.exports = function (str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+};
+```
+
+</CodeGroup>
+
+## Default prompt
+
+If no `prompts` are defined in your config, promptfoo uses `{{prompt}}` as a passthrough — the test variable named `prompt` is sent directly to the provider.
+
+## Viewing rendered prompts
+
+To inspect the final prompt sent to each provider after variable substitution:
+
+<Steps>
+  <Step title="Run the eval">
+    ```bash
+    promptfoo eval
+    ```
+  </Step>
+  <Step title="Open the web viewer">
+    ```bash
+    promptfoo view
+    ```
+  </Step>
+  <Step title="Enable full prompts">
+    In the web UI, go to **Table Settings** and enable **Show full prompt in output cell**.
+  </Step>
+</Steps>

@@ -1,24 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "name": "Promptfoo",
+  "projectType": "cli-tool",
+  "projectName": "Promptfoo",
+  "projectDescription": "An open-source CLI and library for evaluating, testing, and red-teaming LLM applications with declarative configs and CI/CD integration.",
   "theme": "luma",
-  "colors": {
-    "primary": "#b02018",
-    "light": "#0a0506",
-    "dark": "#d8cac9"
-  },
-  "favicon": "https://media.brand.dev/a46bc5f6-f5f4-475c-92b6-9161d2b6248f.jpg",
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/promptfoo/promptfoo"
-    }
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/promptfoo/promptfoo"
-    }
-  },
+  "primaryColor": "#b02018",
+  "lightColor": "#0a0506",
+  "darkColor": "#d8cac9",
   "navigation": {
     "tabs": [
       {
@@ -129,5 +116,29 @@
         ]
       }
     ]
-  }
+  },
+  "keyFeatures": [
+    "Automated LLM evaluation with declarative YAML/JSON configs",
+    "Red teaming and vulnerability scanning for AI applications",
+    "Side-by-side model comparison (GPT, Claude, Gemini, Llama, and more)",
+    "70+ red team plugins for harmful content, PII, prompt injection, and more",
+    "CI/CD integration with GitHub Actions, GitLab, Jenkins, and more",
+    "Node.js library API for programmatic evals",
+    "Built-in assertions: factuality, relevance, JSON validation, LLM-graded rubrics",
+    "MCP (Model Context Protocol) support for agentic testing",
+    "Support for 80+ LLM providers",
+    "Self-hostable web UI for viewing and sharing results"
+  ],
+  "publicApiSurface": [
+    "promptfoo eval — run evaluations from the CLI",
+    "promptfoo redteam run — execute red team scans",
+    "promptfoo init — scaffold a new config",
+    "promptfoo view — launch the web UI",
+    "evaluate(testSuite, options) — Node.js programmatic eval",
+    "loadApiProvider(providerString) — load a provider at runtime",
+    "redteam.run(options) — programmatic red teaming",
+    "assertions — built-in assertion handlers (factuality, llm-rubric, etc.)",
+    "RedteamPluginBase / RedteamGraderBase — base classes for custom plugins",
+    "Plugins / Strategies — registered red team plugin and strategy maps"
+  ]
 }

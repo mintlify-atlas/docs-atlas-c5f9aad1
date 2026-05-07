@@ -1,0 +1,117 @@
+---
+title: "Google Gemini provider configuration"
+description: "Configure Google Gemini 2.5 Pro and Flash models in Promptfoo via Google AI Studio or Vertex AI with support for text, image, and video inputs."
+---
+
+The `google` provider connects Promptfoo to Google AI Studio and the Gemini API, giving access to Gemini 2.5 Pro, Gemini 2.5 Flash, and hosted Gemma models. For Google Cloud Vertex AI, use the `vertex:` provider prefix described in the Vertex AI section below.
+
+## Authentication
+
+### Google AI Studio (recommended for development)
+
+Get an API key from [Google AI Studio](https://aistudio.google.com/) and set it as an environment variable:
+
+```bash
+export GOOGLE_API_KEY=AIza...
+```
+
+Or specify it in your provider config:
+
+```yaml
+providers:
+  - id: google:gemini-2.5-flash
+    config:
+      apiKey: AIza...
+```
+
+### Vertex AI
+
+For Google Cloud Vertex AI, use the `vertex` provider and authenticate with Application Default Credentials:
+
+```bash
+gcloud auth application-default login
+```
+
+```yaml
+providers:
+  - vertex:gemini-2.5-pro
+```
+
+<Warning>
+Never commit API keys to version control. Use environment variables or a `.env` file added to `.gitignore`.
+</Warning>
+
+## Provider strings
+
+```yaml
+providers:
+  # Google AI Studio
+  - google:gemini-2.5-pro
+  - google:gemini-2.5-flash
+  - google:gemini-2.0-flash-exp
+
+  # Vertex AI
+  - vertex:gemini-2.5-pro
+  - vertex:gemini-2.5-flash
+```
+
+## Basic configuration
+
+```yaml title="promptfooconfig.yaml"
+providers:
+  - id: google:gemini-2.5-flash
+    config:
+      temperature: 0.7
+      maxOutputTokens: 2048
+      topP: 0.9
+      topK: 40
+```
+
+## Multimodal inputs
+
+Gemini models support image and video inputs in addition to text. Pass media as part of your prompt variables:
+
+```yaml title="promptfooconfig.yaml"
+prompts:
+  - "Describe what you see in this image: {{image}}"
+
+providers:
+  - id: google:gemini-2.5-flash
+    config:
+      temperature: 0
+
+tests:
+  - vars:
+      image:
+        mimeType: image/jpeg
+        data: "{{file 'image.jpg' | base64}}"
+```
+
+## Configuration reference
+
+| Parameter | Environment variable | Description |
+|---|---|---|
+| `apiKey` | `GOOGLE_API_KEY` | Google AI Studio API key |
+| `apiHost` | `GOOGLE_API_HOST` | Override the API hostname |
+| `apiBaseUrl` | `GOOGLE_API_BASE_URL` | Override the full API base URL |
+| `temperature` | — | Output randomness (0.0 – 2.0) |
+| `maxOutputTokens` | — | Maximum tokens to generate |
+| `topP` | — | Nucleus sampling parameter |
+| `topK` | — | Top-K sampling parameter |
+| `stopSequences` | — | Array of stop sequences |
+| `safetySettings` | — | Array of safety setting objects |
+| `generationConfig` | — | Full `generationConfig` object passed to the API |
+| `systemInstruction` | — | System instruction string |
+| `inputCost` | — | Override input token cost estimate |
+| `outputCost` | — | Override output token cost estimate |
+
+## Vertex AI configuration reference
+
+For the `vertex` provider, authentication relies on [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials). Additional config options:
+
+| Parameter | Environment variable | Description |
+|---|---|---|
+| `projectId` | `VERTEX_PROJECT_ID` or `GCLOUD_PROJECT` | Google Cloud project ID |
+| `region` | `VERTEX_REGION` | Cloud region (default: `us-central1`) |
+| `publisher` | — | Model publisher (default: `google`) |
+| `apiEndpoint` | — | Override the Vertex AI API endpoint |

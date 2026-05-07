@@ -1,0 +1,423 @@
+---
+title: "Automating LLM evals in CI/CD pipelines"
+description: "Run promptfoo evals on every pull request, enforce quality gates, and catch regressions before they reach production with any CI/CD platform."
+---
+
+Integrate promptfoo into your CI/CD pipeline to automatically evaluate prompts on every pull request, fail builds when quality drops below a threshold, and generate reports for security compliance. This guide covers setup for the most common CI platforms.
+
+## Why run evals in CI/CD?
+
+- **Catch regressions early** — test prompt changes before they reach production
+- **Quality gates** — enforce minimum pass rates and fail the build when thresholds aren't met
+- **Security scanning** — run automated red teaming on a schedule
+- **Cost tracking** — monitor token usage and API costs over time
+- **Compliance** — generate OWASP, NIST, and other framework reports
+
+## Quick start
+
+No global install is required. Use `npx` to run evals in any CI environment:
+
+```bash
+# Run eval
+npx promptfoo@latest eval -c promptfooconfig.yaml -o results.json
+
+# Run security scan
+npx promptfoo@latest redteam run
+```
+
+## Prerequisites
+
+- Node.js 20.20+ or 22.22+ in your CI environment
+- LLM provider API keys stored as encrypted secrets
+- A `promptfooconfig.yaml` configuration file
+
+## Output formats
+
+Promptfoo supports multiple output formats for different CI/CD needs:
+
+```bash
+# JSON for programmatic processing
+npx promptfoo@latest eval -o results.json
+
+# HTML for human-readable reports
+npx promptfoo@latest eval -o report.html
+
+# JUnit XML for native CI test-report viewers
+npx promptfoo@latest eval -o results.junit.xml
+
+# Multiple formats at once
+npx promptfoo@latest eval -o results.json -o report.html -o results.junit.xml
+```
+
+## Quality gates
+
+Fail the build when quality thresholds aren't met:
+
+```bash
+# Fail on any test failures
+npx promptfoo@latest eval --fail-on-error
+
+# Custom threshold with jq
+npx promptfoo@latest eval -o results.json
+PASS_RATE=$(jq '.results.stats.successes / (.results.stats.successes + .results.stats.failures) * 100' results.json)
+if (( $(echo "$PASS_RATE < 95" | bc -l) )); then
+  echo "Quality gate failed: Pass rate ${PASS_RATE}% < 95%"
+  exit 1
+fi
+```
+
+## Environment variables for API keys
+
+Store API keys as encrypted CI secrets and pass them as environment variables:
+
+```bash
+# Set in your CI platform's secrets manager, then reference in your workflow:
+OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+
+# Privacy controls
+PROMPTFOO_STRIP_RESPONSE_OUTPUT=true
+PROMPTFOO_STRIP_TEST_VARS=true
+```
+
+## Platform-specific configuration
+
+<Tabs>
+  <Tab title="GitHub Actions">
+    ```yaml
+    name: LLM Eval
+    on:
+      pull_request:
+        paths:
+          - 'prompts/**'
+          - 'promptfooconfig.yaml'
+
+    jobs:
+      evaluate:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+
+          - uses: actions/setup-node@v4
+            with:
+              node-version: '22'
+              cache: 'npm'
+
+          - name: Cache promptfoo
+            uses: actions/cache@v4
+            with:
+              path: ~/.cache/promptfoo
+              key: ${{ runner.os }}-promptfoo-${{ hashFiles('prompts/**') }}
+              restore-keys: |
+                ${{ runner.os }}-promptfoo-
+
+          - name: Run eval
+            env:
+              OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+              PROMPTFOO_CACHE_PATH: ~/.cache/promptfoo
+            run: |
+              npx promptfoo@latest eval \
+                -c promptfooconfig.yaml \
+                --share \
+                -o results.json \
+                -o report.html
+
+          - name: Check quality gate
+            run: |
+              FAILURES=$(jq '.results.stats.failures' results.json)
+              if [ "$FAILURES" -gt 0 ]; then
+                echo "Eval failed with $FAILURES failures"
+                exit 1
+              fi
+              echo "All tests passed!"
+
+          - name: Upload results
+            if: always()
+            uses: actions/upload-artifact@v4
+            with:
+              name: eval-results
+              path: |
+                results.json
+                report.html
+    ```
+
+    For a simpler setup using the official action, see the [GitHub Action integration](/integrations/github-action).
+  </Tab>
+  <Tab title="GitLab CI">
+    ```yaml
+    image: node:22
+
+    evaluate:
+      script:
+        - |
+          npx promptfoo@latest eval \
+            -c promptfooconfig.yaml \
+            --share \
+            -o output.json \
+            -o report.html \
+            -o output.junit.xml
+      variables:
+        OPENAI_API_KEY: ${OPENAI_API_KEY}
+        PROMPTFOO_CACHE_PATH: .cache/promptfoo
+      cache:
+        key: ${CI_COMMIT_REF_SLUG}-promptfoo
+        paths:
+          - .cache/promptfoo
+      artifacts:
+        reports:
+          junit: output.junit.xml
+        paths:
+          - output.json
+          - report.html
+    ```
+  </Tab>
+  <Tab title="CircleCI">
+    ```yaml
+    version: 2.1
+
+    jobs:
+      evaluate:
+        docker:
+          - image: cimg/node:22.0
+        steps:
+          - checkout
+          - restore_cache:
+              keys:
+                - promptfoo-{{ checksum "promptfooconfig.yaml" }}
+          - run:
+              name: Run promptfoo eval
+              command: |
+                npx promptfoo@latest eval \
+                  -c promptfooconfig.yaml \
+                  -o results.json \
+                  -o results.junit.xml
+          - save_cache:
+              key: promptfoo-{{ checksum "promptfooconfig.yaml" }}
+              paths:
+                - ~/.cache/promptfoo
+          - store_test_results:
+              path: results.junit.xml
+          - store_artifacts:
+              path: results.json
+
+    workflows:
+      eval:
+        jobs:
+          - evaluate
+    ```
+  </Tab>
+  <Tab title="Jenkins">
+    ```groovy
+    pipeline {
+        agent any
+
+        environment {
+            OPENAI_API_KEY = credentials('openai-api-key')
+            PROMPTFOO_CACHE_PATH = "${WORKSPACE}/.cache/promptfoo"
+        }
+
+        stages {
+            stage('Evaluate') {
+                steps {
+                    sh '''
+                        npx promptfoo@latest eval \
+                            -c promptfooconfig.yaml \
+                            --share \
+                            -o results.json
+                    '''
+                }
+            }
+
+            stage('Quality Gate') {
+                steps {
+                    script {
+                        def results = readJSON file: 'results.json'
+                        def failures = results.results.stats.failures
+                        if (failures > 0) {
+                            error("Eval failed with ${failures} failures")
+                        }
+                    }
+                }
+            }
+        }
+
+        post {
+            always {
+                archiveArtifacts artifacts: 'results.json', fingerprint: true
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Azure Pipelines">
+    ```yaml
+    trigger:
+      paths:
+        include:
+          - prompts/**
+          - promptfooconfig.yaml
+
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    steps:
+      - task: NodeTool@0
+        inputs:
+          versionSpec: '22.x'
+
+      - task: Cache@2
+        inputs:
+          key: 'promptfoo | $(Agent.OS) | promptfooconfig.yaml'
+          restoreKeys: promptfoo | $(Agent.OS)
+          path: $(HOME)/.cache/promptfoo
+
+      - script: |
+          npx promptfoo@latest eval \
+            -c promptfooconfig.yaml \
+            -o results.json \
+            -o results.junit.xml
+        env:
+          OPENAI_API_KEY: $(OPENAI_API_KEY)
+          PROMPTFOO_CACHE_PATH: $(HOME)/.cache/promptfoo
+        displayName: Run promptfoo eval
+
+      - task: PublishTestResults@2
+        inputs:
+          testResultsFiles: 'results.junit.xml'
+          testRunTitle: 'LLM Eval Results'
+        condition: always()
+    ```
+  </Tab>
+</Tabs>
+
+## Processing JSON output
+
+The output JSON follows this schema:
+
+```typescript
+interface OutputFile {
+  evalId?: string;
+  results: {
+    stats: {
+      successes: number;
+      failures: number;
+      errors: number;
+    };
+    outputs: Array<{
+      pass: boolean;
+      score: number;
+      error?: string;
+    }>;
+  };
+  shareableUrl: string | null;
+}
+```
+
+Example processing script:
+
+```javascript
+const fs = require('fs');
+const results = JSON.parse(fs.readFileSync('results.json', 'utf8'));
+
+const { successes, failures } = results.results.stats;
+const passRate = (successes / (successes + failures)) * 100;
+
+console.log(`Pass rate: ${passRate.toFixed(2)}%`);
+console.log(`Shareable URL: ${results.shareableUrl}`);
+
+// Check for specific failures
+const criticalFailures = results.results.outputs.filter(
+  (o) => o.error?.includes('security') || o.error?.includes('injection'),
+);
+
+if (criticalFailures.length > 0) {
+  console.error('Critical security failures detected!');
+  process.exit(1);
+}
+```
+
+## Posting results to PRs
+
+Extract and share eval results as PR comments:
+
+```bash
+SHARE_URL=$(jq -r '.shareableUrl' results.json)
+PASS_RATE=$(jq '.results.stats.successes / (.results.stats.successes + .results.stats.failures) * 100' results.json)
+
+gh pr comment --body "## Promptfoo Eval Results
+- Pass rate: ${PASS_RATE}%
+- [View detailed results](${SHARE_URL})"
+```
+
+## Caching
+
+Reduce API costs and speed up runs with caching:
+
+```yaml
+env:
+  PROMPTFOO_CACHE_PATH: ~/.cache/promptfoo
+  PROMPTFOO_CACHE_TTL: 86400 # 24 hours
+
+cache:
+  key: promptfoo-${{ hashFiles('prompts/**', 'promptfooconfig.yaml') }}
+  paths:
+    - ~/.cache/promptfoo
+```
+
+## Parallel testing
+
+Test multiple models in parallel using a matrix strategy:
+
+```yaml
+strategy:
+  matrix:
+    model: [gpt-4, gpt-4o-mini, claude-3-5-sonnet]
+steps:
+  - name: Test ${{ matrix.model }}
+    run: |
+      npx promptfoo@latest eval \
+        --providers.0.config.model=${{ matrix.model }} \
+        -o results-${{ matrix.model }}.json
+```
+
+## Scheduled security scans
+
+Run comprehensive security scans on a schedule:
+
+```yaml
+on:
+  schedule:
+    - cron: '0 2 * * *' # 2 AM daily
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Full red team scan
+        run: |
+          npx promptfoo@latest redteam generate \
+            --plugins harmful,pii,contracts \
+            --strategies jailbreak,prompt-injection
+          npx promptfoo@latest redteam run
+```
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Rate limits | Enable caching, reduce concurrency with `-j 1` |
+| Timeouts | Increase timeout values, use `--max-concurrency` |
+| Memory issues | Use streaming mode, process results in batches |
+| Cache misses | Ensure cache key includes all relevant files |
+
+Enable debug logging for detailed output:
+
+```bash
+LOG_LEVEL=debug npx promptfoo@latest eval -c config.yaml
+```
+
+## Related
+
+- [GitHub Action integration](/integrations/github-action)
+- [Jest integration](/integrations/jest)
+- [Assertions and metrics](/configuration/expected-outputs)

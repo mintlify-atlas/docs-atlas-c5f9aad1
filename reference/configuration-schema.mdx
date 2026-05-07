@@ -1,0 +1,295 @@
+---
+title: "Promptfoo YAML configuration schema"
+description: "Complete reference for all top-level keys in promptfooconfig.yaml, including prompts, providers, tests, assertions, redteam, and evaluation options."
+---
+
+`promptfooconfig.yaml` is the central configuration file for every promptfoo eval. Place it in your project root and run `promptfoo eval` to execute. Every field is optional unless marked required.
+
+<Tip>
+  Add `# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json` to the top of your file to get editor autocompletion and inline validation.
+</Tip>
+
+## Top-level fields
+
+<ParamField path="description" type="string">
+  Human-readable description of what this eval is testing. Stored with results for later reference.
+</ParamField>
+
+<ParamField path="tags" type="Record<string, string>">
+  Key-value tags to label the test suite. Useful for filtering and grouping results.
+
+  ```yaml
+  tags:
+    env: production
+    application: chatbot
+  ```
+</ParamField>
+
+<ParamField path="prompts" type="string | string[] | Record<string, string> | Prompt[]" required>
+  One or more prompts to evaluate. Can be:
+  - Inline strings (with `{{variable}}` Nunjucks templates)
+  - Paths to `.txt` files
+  - Paths to `.js`/`.py` files that export a prompt function
+  - Objects with `id`, `label`, and `raw` fields
+
+  ```yaml
+  prompts:
+    - "Answer the following question: {{question}}"
+    - file://prompts/system.txt
+    - id: chain-of-thought
+      label: CoT prompt
+      raw: "Think step by step: {{question}}"
+  ```
+</ParamField>
+
+<ParamField path="providers" type="string[] | ProviderOptions[]" required>
+  LLM providers to test against. Accepts provider identifier strings or config objects. Exactly one of `providers` or `targets` must be set.
+
+  ```yaml
+  providers:
+    - openai:gpt-4.1
+    - anthropic:messages:claude-opus-4-5
+    - id: openai:gpt-4.1-mini
+      label: GPT-4.1 Mini
+      config:
+        temperature: 0.2
+  ```
+</ParamField>
+
+<ParamField path="targets" type="string[] | ProviderOptions[]">
+  Alias for `providers`. Commonly used in red team configurations. Exactly one of `targets` or `providers` must be set.
+</ParamField>
+
+<ParamField path="tests" type="string | TestCase[] | TestGeneratorConfig">
+  Test cases to run. Can be:
+  - A path to a CSV file
+  - An inline array of test case objects
+  - A generator config object referencing a JS/Python function
+
+  If omitted, promptfoo runs each prompt/provider pair once with empty variables.
+
+  ```yaml
+  tests:
+    - vars:
+        question: "What is the capital of France?"
+      assert:
+        - type: contains
+          value: Paris
+    - vars:
+        question: "What is 2 + 2?"
+      assert:
+        - type: equals
+          value: "4"
+  ```
+</ParamField>
+
+<ParamField path="scenarios" type="string[] | Scenario[]">
+  Scenario files or inline scenario definitions. Scenarios allow you to reuse a set of test cases across multiple prompt/provider combinations.
+</ParamField>
+
+<ParamField path="defaultTest" type="Partial<TestCase> | file:// path">
+  Default properties applied to every test case. Useful for sharing common assertions or variables. Can be an inline object or a `file://` path to an external YAML/JSON file.
+
+  ```yaml
+  defaultTest:
+    vars:
+      language: English
+    assert:
+      - type: not-contains
+        value: "I cannot help"
+  ```
+</ParamField>
+
+<ParamField path="outputPath" type="string | string[]">
+  File path(s) where results are written. Supports `csv`, `txt`, `json`, `jsonl`, `yaml`, `html`, `xml`, and `junit.xml` formats. If omitted, results are shown in the terminal and web UI only.
+
+  ```yaml
+  outputPath: results/output.json
+  ```
+</ParamField>
+
+<ParamField path="sharing" type="boolean | object">
+  Enable or configure result sharing. When `true`, a shareable URL is created after each eval. Accepts an object with optional `apiBaseUrl` and `appBaseUrl` for self-hosted deployments.
+
+  ```yaml
+  sharing: true
+  ```
+</ParamField>
+
+<ParamField path="nunjucksFilters" type="Record<string, string>">
+  Map of Nunjucks filter names to file paths. Allows custom template filters in prompts.
+
+  ```yaml
+  nunjucksFilters:
+    uppercase: ./filters/uppercase.js
+  ```
+</ParamField>
+
+<ParamField path="env" type="Record<string, string | number | boolean>">
+  Environment variables set for the duration of the eval. Override existing shell variables. Useful for providing API keys without a `.env` file.
+
+  ```yaml
+  env:
+    OPENAI_API_KEY: sk-...
+    MY_CUSTOM_VAR: hello
+  ```
+</ParamField>
+
+<ParamField path="extensions" type="string[]">
+  Extension hook files to load. Each entry is a `file://` path with an exported function name. Supported hooks: `beforeAll`, `afterAll`, `beforeEach`, `afterEach`. Accepts `.js` and `.py` files.
+
+  ```yaml
+  extensions:
+    - file://hooks/setup.js:beforeAll
+    - file://hooks/cleanup.py:afterAll
+  ```
+</ParamField>
+
+<ParamField path="derivedMetrics" type="DerivedMetric[]">
+  Metrics computed after the eval by combining named assertion scores using arithmetic expressions.
+</ParamField>
+
+<ParamField path="metadata" type="Record<string, any>">
+  Arbitrary key-value metadata stored with the eval config. Useful for tagging runs in CI.
+</ParamField>
+
+<ParamField path="writeLatestResults" type="boolean">
+  Write the latest results to promptfoo storage so they appear in the web UI. Defaults to `true` unless `--no-write` is passed.
+</ParamField>
+
+<ParamField path="redteam" type="RedteamConfig">
+  Red team configuration for adversarial testing. When present, `promptfoo redteam run` uses this block to configure attack plugins, strategies, and targets. See the [red team configuration guide](/red-team/configuration) for full details.
+
+  ```yaml
+  redteam:
+    plugins:
+      - harmful:hate
+      - prompt-injection
+    strategies:
+      - jailbreak
+    numTests: 10
+  ```
+</ParamField>
+
+<ParamField path="tracing" type="TracingConfig">
+  OpenTelemetry tracing configuration. Enables trace collection from providers during evaluation.
+</ParamField>
+
+## `evaluateOptions`
+
+Controls how the test harness runs evaluations.
+
+<ParamField path="evaluateOptions.maxConcurrency" type="number">
+  Maximum concurrent provider API calls. Defaults to `4`.
+
+  ```yaml
+  evaluateOptions:
+    maxConcurrency: 10
+  ```
+</ParamField>
+
+<ParamField path="evaluateOptions.repeat" type="number">
+  Number of times to run each test case. Defaults to `1`. Useful for measuring consistency.
+</ParamField>
+
+<ParamField path="evaluateOptions.delay" type="number">
+  Milliseconds to wait between API calls. Defaults to `0`. Use to avoid rate limits.
+</ParamField>
+
+<ParamField path="evaluateOptions.cache" type="boolean">
+  Whether to use disk cache for provider responses. Defaults to `true`. Equivalent to `--no-cache` on the CLI.
+</ParamField>
+
+<ParamField path="evaluateOptions.timeoutMs" type="number">
+  Timeout in milliseconds per test case. When exceeded, the test is marked as an error. Defaults to `0` (no timeout).
+</ParamField>
+
+<ParamField path="evaluateOptions.maxEvalTimeMs" type="number">
+  Maximum total runtime in milliseconds for the entire evaluation. When exceeded, remaining tests are marked as errors. Defaults to `0` (no limit).
+</ParamField>
+
+<ParamField path="evaluateOptions.showProgressBar" type="boolean">
+  Whether to display the progress bar during evaluation.
+</ParamField>
+
+## `commandLineOptions`
+
+Set default values for CLI flags. These are used unless overridden by actual command-line arguments.
+
+```yaml
+commandLineOptions:
+  maxConcurrency: 10
+  repeat: 3
+  delay: 1000
+  verbose: true
+  cache: false
+  grader: openai:gpt-4.1-mini
+  table: true
+  tableCellMaxLength: 100
+  filterPattern: 'auth.*'
+  filterRange: '0:100'
+  promptPrefix: 'You are a helpful assistant. '
+  var:
+    language: English
+```
+
+## Complete annotated example
+
+```yaml
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+
+description: Customer support assistant evaluation
+
+tags:
+  env: staging
+  team: nlp
+
+prompts:
+  - "You are a helpful customer support agent.\n\nUser: {{question}}\nAgent:"
+  - file://prompts/detailed-system.txt
+
+providers:
+  - openai:gpt-4.1
+  - id: anthropic:messages:claude-opus-4-5
+    label: Claude Opus
+    config:
+      max_tokens: 512
+
+tests:
+  - vars:
+      question: How do I reset my password?
+    assert:
+      - type: contains-any
+        value: [password, reset, email]
+      - type: not-contains
+        value: "I don't know"
+  - vars:
+      question: What are your business hours?
+    assert:
+      - type: llm-rubric
+        value: Answer mentions specific hours or directs user to a resource
+
+defaultTest:
+  assert:
+    - type: not-contains
+      value: "I cannot help with that"
+
+outputPath:
+  - results/eval.json
+  - results/eval.html
+
+sharing: false
+
+env:
+  OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+extensions:
+  - file://hooks/log.js:afterEach
+
+evaluateOptions:
+  maxConcurrency: 8
+  repeat: 1
+  delay: 500
+  cache: true
+  timeoutMs: 30000
+```

@@ -1,0 +1,151 @@
+---
+title: "OpenAI provider configuration"
+description: "Configure OpenAI GPT-4o, GPT-5, o-series reasoning models, embeddings, and assistants in Promptfoo using the openai: provider string."
+---
+
+The OpenAI provider integrates GPT models, reasoning models, embeddings, image generation, assistants, and more into Promptfoo evals. Set your API key and specify a provider string to get started.
+
+## Authentication
+
+Set the `OPENAI_API_KEY` environment variable:
+
+```bash
+export OPENAI_API_KEY=sk-...
+```
+
+Or pass it directly in your config:
+
+```yaml
+providers:
+  - id: openai:gpt-4o
+    config:
+      apiKey: sk-...
+```
+
+## Provider string formats
+
+| Format | Description |
+|---|---|
+| `openai:<model>` | Auto-routes known model IDs to the correct endpoint |
+| `openai:chat:<model>` | Forces the `/v1/chat/completions` endpoint |
+| `openai:responses:<model>` | Uses the Responses API |
+| `openai:completion:<model>` | Uses the `/v1/completions` endpoint |
+| `openai:embedding:<model>` | Uses the `/v1/embeddings` endpoint |
+| `openai:image:<model>` | Image generation via DALL·E |
+| `openai:assistant:<id>` | Calls a saved Assistant |
+| `openai:realtime:<model>` | Realtime API over WebSocket |
+
+<Tip>
+When OpenAI releases a new model, you can use it immediately with the explicit endpoint form before promptfoo adds auto-routing support. For example: `openai:chat:gpt-5-new-variant`.
+</Tip>
+
+## Basic examples
+
+```yaml title="promptfooconfig.yaml"
+providers:
+  - openai:gpt-4o
+
+  - id: openai:chat:gpt-4.1-mini
+    config:
+      temperature: 0
+      max_tokens: 1024
+
+  - id: openai:chat:gpt-5
+    config:
+      max_completion_tokens: 2048
+```
+
+## Reasoning models
+
+For o-series and GPT-5 family models, use `max_completion_tokens` instead of `max_tokens`. The `temperature` parameter is ignored by these models.
+
+```yaml
+providers:
+  - id: openai:responses:gpt-5
+    config:
+      reasoning:
+        effort: high   # none | low | medium | high | xhigh
+        summary: auto  # auto | concise | detailed
+
+  - id: openai:chat:gpt-5
+    config:
+      max_completion_tokens: 4096
+      reasoning_effort: medium   # GPT-5 chat: low | medium | high
+```
+
+## Structured output
+
+Use `response_format` to request JSON output:
+
+```yaml
+providers:
+  - id: openai:chat:gpt-4o
+    config:
+      response_format:
+        type: json_schema
+        json_schema:
+          name: answer
+          schema:
+            type: object
+            properties:
+              answer:
+                type: string
+            required: [answer]
+```
+
+## Function calling
+
+```yaml
+providers:
+  - id: openai:chat:gpt-4o
+    config:
+      tools:
+        - type: function
+          function:
+            name: get_weather
+            description: Get the current weather for a location
+            parameters:
+              type: object
+              properties:
+                location:
+                  type: string
+                  description: City and state, e.g. "San Francisco, CA"
+              required: [location]
+      tool_choice: auto
+```
+
+## Configuration reference
+
+| Parameter | Description |
+|---|---|
+| `apiKey` | OpenAI API key (equivalent to `OPENAI_API_KEY`) |
+| `apiBaseUrl` | Override the API base URL |
+| `organization` | OpenAI organization ID |
+| `temperature` | Output randomness for non-reasoning models (0–1) |
+| `max_tokens` | Max output tokens for non-reasoning models |
+| `max_completion_tokens` | Max tokens for GPT-5 family / o-series (Chat Completions) |
+| `reasoning` | Reasoning config object for Responses API (`effort`, `summary`) |
+| `top_p` | Nucleus sampling parameter |
+| `frequency_penalty` | Penalty for token frequency (−2 to 2) |
+| `presence_penalty` | Penalty for token presence (−2 to 2) |
+| `stop` | Stop sequences |
+| `response_format` | Output format: `json_object` or `json_schema` |
+| `seed` | Seed for deterministic sampling |
+| `tools` | Tool/function definitions |
+| `tool_choice` | Tool selection: `none`, `auto`, or a specific tool |
+| `functions` | Legacy function definitions |
+| `function_call` | Legacy function call control |
+| `headers` | Additional HTTP headers |
+| `inputCost` | Override input token cost estimate |
+| `outputCost` | Override output token cost estimate |
+| `maxRetries` | Retry attempts on failure (default: 4) |
+| `passthrough` | Arbitrary parameters passed directly to the API body |
+
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `OPENAI_API_KEY` | API key |
+| `OPENAI_BASE_URL` | Override the API base URL |
+| `OPENAI_API_HOST` | Override the API hostname |
+| `OPENAI_ORGANIZATION` | Organization ID |

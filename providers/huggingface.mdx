@@ -1,0 +1,104 @@
+---
+title: "HuggingFace provider configuration"
+description: "Access thousands of HuggingFace models in Promptfoo via the OpenAI-compatible chat API, Inference Providers, text classification, embeddings, and NER tasks."
+---
+
+The HuggingFace provider gives Promptfoo access to thousands of models through HuggingFace's OpenAI-compatible chat endpoint, Inference Providers, and task-specific Inference API.
+
+## Authentication
+
+Get a token from [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) and set it as an environment variable:
+
+```bash
+export HF_API_TOKEN=hf_...
+```
+
+## Provider string formats
+
+| Format | Description |
+|---|---|
+| `huggingface:chat:<model>` | OpenAI-compatible chat API (recommended) |
+| `huggingface:text-generation:<model>` | Raw text generation via Inference API |
+| `huggingface:text-classification:<model>` | Text classification |
+| `huggingface:token-classification:<model>` | Token classification / NER |
+| `huggingface:feature-extraction:<model>` | Embedding extraction |
+| `huggingface:sentence-similarity:<model>` | Sentence similarity scoring |
+
+## Chat models (recommended)
+
+The `huggingface:chat` provider connects to HuggingFace's `/v1/chat/completions` endpoint, which is compatible with OpenAI tooling including function calling and streaming.
+
+```yaml title="promptfooconfig.yaml"
+providers:
+  - id: huggingface:chat:meta-llama/Llama-3.3-70B-Instruct
+    config:
+      temperature: 0.7
+      max_new_tokens: 1024
+
+  - huggingface:chat:deepseek-ai/DeepSeek-R1
+
+  - huggingface:chat:Qwen/Qwen2.5-Coder-32B-Instruct
+```
+
+Browse available chat models at [huggingface.co/models?other=conversational](https://huggingface.co/models?other=conversational).
+
+## Inference Provider routing
+
+HuggingFace routes requests through inference partners (Cerebras, Together AI, Fireworks AI, and others). Select a provider with a `:provider` suffix or via config:
+
+```yaml
+providers:
+  # Suffix on model name
+  - huggingface:chat:Qwen/QwQ-32B:featherless-ai
+
+  # Or via config option
+  - id: huggingface:chat:Qwen/QwQ-32B
+    config:
+      inferenceProvider: featherless-ai
+
+  # Smart selectors
+  - huggingface:chat:meta-llama/Llama-3.3-70B-Instruct:fastest
+  - huggingface:chat:meta-llama/Llama-3.3-70B-Instruct:cheapest
+```
+
+When both the suffix and `inferenceProvider` are set, the suffix takes precedence.
+
+## Custom endpoint URL
+
+Point to a custom HuggingFace Inference Endpoint or a self-hosted model server:
+
+```yaml
+providers:
+  - id: huggingface:text-generation:mistralai/Mistral-7B-v0.1
+    config:
+      apiEndpoint: https://api-inference.huggingface.co/models/mistralai/Mistral-7B-v0.1
+```
+
+## Classification and embeddings
+
+```yaml
+providers:
+  # Sentiment analysis
+  - huggingface:text-classification:cardiffnlp/twitter-roberta-base-sentiment-latest
+
+  # Named entity recognition
+  - huggingface:token-classification:dslim/bert-base-NER
+
+  # Sentence embeddings (for similarity assertions)
+  - huggingface:feature-extraction:sentence-transformers/all-MiniLM-L6-v2
+```
+
+## Configuration reference
+
+| Parameter | Environment variable | Description |
+|---|---|---|
+| `apiKey` | `HF_API_TOKEN` | HuggingFace API token |
+| `apiEndpoint` | — | Full URL override for the inference endpoint |
+| `inferenceProvider` | — | Inference provider name (e.g. `featherless-ai`, `together`, `fastest`) |
+| `temperature` | — | Output randomness |
+| `max_new_tokens` | — | Maximum tokens to generate |
+| `top_p` | — | Nucleus sampling parameter |
+| `top_k` | — | Top-K sampling parameter |
+| `repetition_penalty` | — | Penalize repeated tokens |
+| `inputCost` | — | Override input token cost estimate |
+| `outputCost` | — | Override output token cost estimate |

@@ -1,133 +1,86 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
-icon: 'star'
+title: "Promptfoo: LLM Evaluation & Red Teaming"
+description: "Test your prompts, compare models, and scan for AI vulnerabilities. Open-source toolkit used by OpenAI, Anthropic, and teams worldwide."
 ---
 
-## Setting up
+Promptfoo is an open-source CLI and library for evaluating LLM applications and running automated red team security scans. Define test cases in YAML, run evals against any model, and catch regressions before they reach production.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Get started" icon="rocket" href="/quickstart">
+    Run your first LLM evaluation in under 5 minutes with a guided walkthrough.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Red teaming" icon="shield-halved" href="/red-team/introduction">
+    Scan your AI app for vulnerabilities, jailbreaks, and harmful outputs.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Providers" icon="plug" href="/providers/overview">
+    Connect to OpenAI, Anthropic, Google, Azure, Bedrock, Ollama, and 80+ more.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="CLI reference" icon="terminal" href="/reference/cli">
+    Full reference for every promptfoo command, flag, and option.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Why Promptfoo?
 
-Everything you need to create world-class documentation.
+Promptfoo runs entirely on your machine — your prompts and data never leave your infrastructure. It integrates with CI/CD pipelines so quality gates catch regressions automatically on every pull request.
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
+<CardGroup cols={2}>
+  <Card title="Configuration guide" icon="sliders" href="/configuration/guide">
+    Learn how to write eval configs with prompts, test cases, and assertions.
   </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
+  <Card title="CI/CD integration" icon="arrows-spin" href="/integrations/ci-cd">
+    Automate evals in GitHub Actions, GitLab CI, Jenkins, and more.
   </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
+  <Card title="Node.js API" icon="code" href="/reference/node-api">
+    Use promptfoo programmatically in your TypeScript or JavaScript projects.
   </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
+  <Card title="OWASP LLM Top 10" icon="list-check" href="/red-team/owasp-llm-top-10">
+    Map red team plugins to OWASP's top 10 LLM security risks.
   </Card>
-</Columns>
+</CardGroup>
 
-## Make your content agent ready
+## Quick install
 
-Make your docs work for humans and AI agents alike.
+<CodeGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Prompt component"
-    icon="robot"
-    href="/agent-ready/prompt"
-  >
-    Embed shareable AI prompts readers can copy or open in Cursor.
-  </Card>
-  <Card
-    title="Visibility"
-    icon="eye"
-    href="/agent-ready/visibility"
-  >
-    Show different content to humans and agents reading your docs.
-  </Card>
-  <Card
-    title="Contextual menu"
-    icon="bolt"
-    href="/agent-ready/contextual"
-  >
-    Give readers one-click access to Claude, ChatGPT, Cursor, and more.
-  </Card>
-  <Card
-    title="AI coding tools"
-    icon="wand-magic-sparkles"
-    href="/ai-tools/claude-code"
-  >
-    Set up Claude Code, Cursor, or Windsurf with Mintlify's skill.
-  </Card>
-</Columns>
+```bash npm
+npm install -g promptfoo
+```
 
-## Need inspiration?
+```bash brew
+brew install promptfoo
+```
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+```bash pip
+pip install promptfoo
+```
+
+```bash npx
+npx promptfoo@latest eval
+```
+
+</CodeGroup>
+
+<Steps>
+  <Step title="Initialize a project">
+    ```bash
+    promptfoo init --example getting-started
+    cd getting-started
+    ```
+  </Step>
+  <Step title="Set your API key">
+    ```bash
+    export OPENAI_API_KEY=sk-...
+    ```
+  </Step>
+  <Step title="Run an evaluation">
+    ```bash
+    promptfoo eval
+    promptfoo view
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  Promptfoo is now part of OpenAI. The project remains open source and MIT licensed. [Read the announcement](https://www.promptfoo.dev/blog/promptfoo-joining-openai/).
+</Tip>

@@ -1,0 +1,278 @@
+---
+title: "EU AI Act compliance testing with Promptfoo"
+description: "Test AI systems against EU AI Act prohibited practices and high-risk requirements using Promptfoo plugins for bias, privacy, safety, and transparency."
+---
+
+The EU Artificial Intelligence Act (AI Act), enacted in 2024, is the world's first comprehensive legal framework for AI systems. It uses a risk-based approach: outright prohibiting certain practices, heavily regulating high-risk systems, and providing lighter requirements for limited- and minimal-risk AI. Promptfoo's red teaming capabilities cover both **Article 5 prohibited practices** and **Annex III high-risk system requirements**.
+
+## Running an EU AI Act scan
+
+Use the `eu:ai-act` shorthand to test across all covered categories at once:
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act
+  strategies:
+    - jailbreak:meta
+    - jailbreak:composite
+    - jailbreak-templates
+```
+
+Target specific articles or risk categories directly:
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act:art5:subliminal-manipulation
+    - eu:ai-act:annex3:biometric-id
+    - eu:ai-act:annex3:law-enforcement
+```
+
+## Article 5: Prohibited practices
+
+### Subliminal manipulation (`eu:ai-act:art5:subliminal-manipulation`)
+
+AI must not deploy subliminal techniques to materially distort user behavior in a way that causes harm.
+
+**Promptfoo coverage:** `hijacking`, `intent`, `excessive-agency`.
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act:art5:subliminal-manipulation
+    # Equivalent to:
+    - hijacking
+    - intent
+    - excessive-agency
+  strategies:
+    - jailbreak:meta
+    - jailbreak:composite
+    - jailbreak-templates
+```
+
+### Exploitation of vulnerabilities (`eu:ai-act:art5:exploitation-of-vulnerabilities`)
+
+AI must not exploit the age, disability, or social/economic situation of persons to distort their behavior harmfully.
+
+**Promptfoo coverage:** `hijacking`, `imitation`, `harmful:misinformation-disinformation`.
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act:art5:exploitation-of-vulnerabilities
+    # Equivalent to:
+    - hijacking
+    - imitation
+    - harmful:misinformation-disinformation
+```
+
+### Social scoring (`eu:ai-act:art5:social-scoring`)
+
+AI must not evaluate or classify persons based on social behavior in ways that cause detrimental treatment.
+
+**Promptfoo coverage:** `harmful:misinformation-disinformation`, `overreliance`.
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act:art5:social-scoring
+    # Equivalent to:
+    - harmful:misinformation-disinformation
+    - overreliance
+```
+
+### Biometric categorisation (`eu:ai-act:art5:biometric-categorisation`)
+
+AI must not infer race, political opinions, religious beliefs, sex life, or sexual orientation from biometric data.
+
+**Promptfoo coverage:** `pii:direct`, `pii:session`, `harmful:privacy`.
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act:art5:biometric-categorisation
+    # Equivalent to:
+    - pii:direct
+    - pii:session
+    - harmful:privacy
+```
+
+### Remote biometric identification (`eu:ai-act:art5:remote-biometric-id-live`, `eu:ai-act:art5:remote-biometric-id-post`)
+
+Real-time and post-event remote biometric identification in public spaces for law enforcement are prohibited with narrow exceptions.
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act:art5:remote-biometric-id-live
+    - eu:ai-act:art5:remote-biometric-id-post
+```
+
+## Annex III: High-risk AI systems
+
+### Biometric identification (`eu:ai-act:annex3:biometric-id`)
+
+High-risk systems for biometric identification of natural persons require strict accuracy and privacy controls.
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act:annex3:biometric-id
+    # Equivalent to:
+    - pii:direct
+    - pii:session
+    - harmful:privacy
+```
+
+### Critical infrastructure (`eu:ai-act:annex3:critical-infrastructure`)
+
+AI used as safety components in energy, water, transport, or other critical infrastructure.
+
+**Promptfoo coverage:** `shell-injection`, `sql-injection`, `ssrf`, `excessive-agency`.
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act:annex3:critical-infrastructure
+    # Equivalent to:
+    - shell-injection
+    - sql-injection
+    - ssrf
+    - excessive-agency
+  strategies:
+    - jailbreak:meta
+    - jailbreak-templates
+```
+
+### Education (`eu:ai-act:annex3:education`)
+
+AI used to determine access to educational institutions or assess learning outcomes.
+
+**Promptfoo coverage:** `harmful:misinformation-disinformation`, `hallucination`, `overreliance`.
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act:annex3:education
+```
+
+### Employment (`eu:ai-act:annex3:employment`)
+
+AI used for recruitment, selection, promotion, or termination of employment.
+
+**Promptfoo coverage:** `imitation`, `pii:direct`, `overreliance`.
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act:annex3:employment
+```
+
+### Essential services (`eu:ai-act:annex3:essential-services`)
+
+AI used to evaluate creditworthiness or access to essential public services.
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act:annex3:essential-services
+```
+
+### Law enforcement (`eu:ai-act:annex3:law-enforcement`)
+
+AI used for law enforcement risk assessments, polygraph interpretation, and evidence evaluation.
+
+**Promptfoo coverage:** `pii:direct`, `pii:api-db`, `harmful:privacy`.
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act:annex3:law-enforcement
+```
+
+### Migration and border control (`eu:ai-act:annex3:migration-border`)
+
+AI used for migration, asylum, and border control management.
+
+**Promptfoo coverage:** `pii:direct`, `harmful:hate`, `harmful:privacy`.
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act:annex3:migration-border
+```
+
+### Justice and democracy (`eu:ai-act:annex3:justice-democracy`)
+
+AI assisting judicial authorities in researching facts, interpreting law, or supporting democratic processes.
+
+**Promptfoo coverage:** `hallucination`, `harmful:misinformation-disinformation`, `pii:direct`.
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act:annex3:justice-democracy
+```
+
+## Bias testing
+
+Bias is a central concern for high-risk AI under the EU AI Act. Use the `harmful:hate`, `harmful:harassment-bullying`, and `harmful:insults` plugins, or target the employment and education Annex III categories which include bias-related coverage:
+
+```yaml
+redteam:
+  plugins:
+    - harmful:hate
+    - harmful:harassment-bullying
+    - harmful:insults
+    - eu:ai-act:annex3:employment  # Bias in hiring decisions
+    - eu:ai-act:annex3:education   # Bias in educational assessment
+```
+
+## Transparency requirements
+
+The EU AI Act requires AI systems to inform users they are interacting with AI, mark AI-generated content, and support detection of deepfakes. Test whether your system resists attempts to impersonate humans or obscure its AI nature:
+
+```yaml
+redteam:
+  plugins:
+    - imitation       # Does the system impersonate a human?
+    - excessive-agency  # Does it act without user awareness?
+```
+
+## Article-to-plugin reference
+
+| Provision | Shorthand | Key plugins |
+|---|---|---|
+| Art. 5 — Subliminal manipulation | `eu:ai-act:art5:subliminal-manipulation` | `hijacking`, `intent`, `excessive-agency` |
+| Art. 5 — Exploitation | `eu:ai-act:art5:exploitation-of-vulnerabilities` | `hijacking`, `imitation`, `harmful:misinformation-disinformation` |
+| Art. 5 — Social scoring | `eu:ai-act:art5:social-scoring` | `harmful:misinformation-disinformation`, `overreliance` |
+| Art. 5 — Biometric categorisation | `eu:ai-act:art5:biometric-categorisation` | `pii:direct`, `pii:session`, `harmful:privacy` |
+| Annex III — Critical infrastructure | `eu:ai-act:annex3:critical-infrastructure` | `shell-injection`, `sql-injection`, `ssrf`, `excessive-agency` |
+| Annex III — Employment | `eu:ai-act:annex3:employment` | `imitation`, `pii:direct`, `overreliance` |
+| Annex III — Law enforcement | `eu:ai-act:annex3:law-enforcement` | `pii:direct`, `pii:api-db`, `harmful:privacy` |
+| Annex III — Justice & democracy | `eu:ai-act:annex3:justice-democracy` | `hallucination`, `harmful:misinformation-disinformation`, `pii:direct` |
+
+## Combining with other frameworks
+
+```yaml
+redteam:
+  plugins:
+    - eu:ai-act
+    - nist:ai:measure
+    - owasp:llm
+  strategies:
+    - jailbreak:meta
+    - jailbreak:composite
+    - jailbreak-templates
+```
+
+<Note>
+Automated red teaming addresses technical risk identification. Full EU AI Act compliance also requires documentation (risk management system, technical docs, instructions for use), transparency obligations (AI disclosure, content marking), human oversight mechanisms, and post-market monitoring. Violations of prohibited practices carry fines up to €35 million or 7% of global annual turnover.
+</Note>
+
+## Related
+
+- [OWASP LLM Top 10 coverage](/red-team/owasp-llm-top-10)
+- [NIST AI RMF alignment](/red-team/nist-ai-rmf)
+- [Red team strategies overview](/red-team/strategies/overview)

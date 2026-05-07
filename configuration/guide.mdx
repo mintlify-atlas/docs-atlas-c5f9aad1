@@ -1,0 +1,244 @@
+---
+title: "Configuration guide for Promptfoo evals"
+description: "Learn how to configure promptfoo evaluations with prompts, providers, and test cases. Covers the full promptfooconfig.yaml structure and key options."
+---
+
+Promptfoo evaluations are driven by a `promptfooconfig.yaml` file. This file defines what prompts to test, which LLM providers to run them through, and what test cases (with optional assertions) to evaluate. Running `promptfoo eval` reads this config and produces a matrix of results you can review in the web UI or export to a file.
+
+## Minimal working example
+
+The config below translates text into different languages using two providers. It runs each prompt through GPT and Gemini, substituting `language` and `input` variables:
+
+```yaml
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: Translation eval
+
+prompts:
+  - 'Translate the following text to {{language}}: {{input}}'
+
+providers:
+  - openai:gpt-5-mini
+  - vertex:gemini-2.0-flash-exp
+
+tests:
+  - vars:
+      language: French
+      input: Hello world
+    assert:
+      - type: contains
+        value: 'Bonjour'
+  - vars:
+      language: German
+      input: How's it going?
+    assert:
+      - type: similar
+        value: wie geht es
+        threshold: 0.6
+```
+
+## Top-level keys
+
+<AccordionGroup>
+  <Accordion title="description">
+    An optional human-readable label for the eval. Shown in the web UI and included in exported results.
+
+    ```yaml
+    description: Customer service chatbot evaluation
+    ```
+  </Accordion>
+
+  <Accordion title="prompts">
+    One or more prompts to evaluate. Supports inline strings, file references, and dynamic functions.
+
+    ```yaml
+    # Inline string
+    prompts:
+      - 'Summarize this: {{content}}'
+
+    # External file
+    prompts:
+      - file://prompts/system_prompt.txt
+
+    # Multiple prompts compared side-by-side
+    prompts:
+      - file://prompts/v1.txt
+      - file://prompts/v2.txt
+    ```
+
+    See [Defining prompts](/configuration/prompts) for the full range of formats including chat JSON, JavaScript functions, and glob patterns.
+  </Accordion>
+
+  <Accordion title="providers">
+    One or more LLM APIs to run prompts through. Each provider can be a shorthand string or a detailed object with configuration overrides.
+
+    ```yaml
+    providers:
+      - openai:gpt-5-mini
+      - anthropic:messages:claude-sonnet-4-6
+      - id: openai:gpt-5
+        config:
+          temperature: 0.2
+    ```
+
+    Providers can also be loaded from external files:
+
+    ```yaml
+    providers:
+      - file://path/to/provider.yaml
+    ```
+  </Accordion>
+
+  <Accordion title="tests">
+    Test cases to run against every prompt/provider combination. Each test case provides variable values and optional assertions.
+
+    ```yaml
+    tests:
+      - vars:
+          question: What is the capital of France?
+        assert:
+          - type: contains
+            value: Paris
+    ```
+
+    Tests can also be loaded from CSV, JSON, or generated dynamically:
+
+    ```yaml
+    tests: file://tests/cases.csv
+    ```
+
+    See [Writing test cases](/configuration/test-cases) for all supported formats.
+  </Accordion>
+
+  <Accordion title="defaultTest">
+    Sets default properties applied to every test case. Use this to share assertions, variables, or options across all tests without repeating them.
+
+    ```yaml
+    defaultTest:
+      assert:
+        - type: llm-rubric
+          value: does not describe self as an AI, model, or chatbot
+      vars:
+        audience: developer
+    ```
+
+    Individual test cases can override `defaultTest` values. Set `options.disableDefaultAsserts: true` on a test to skip inherited assertions while keeping other defaults.
+  </Accordion>
+
+  <Accordion title="outputPath">
+    Where to write evaluation results. If omitted, results go to the web viewer. Supports HTML, JSON, CSV, and YAML.
+
+    ```yaml
+    outputPath: results/eval_2024.html
+    ```
+  </Accordion>
+
+  <Accordion title="evaluateOptions">
+    Controls execution behavior such as concurrency, retries, and caching.
+
+    ```yaml
+    evaluateOptions:
+      maxConcurrency: 4
+      repeat: 1
+      delay: 0
+      cache: true
+    ```
+  </Accordion>
+
+  <Accordion title="env">
+    Environment variables scoped to the eval run. Useful for setting API keys or feature flags without modifying your shell environment.
+
+    ```yaml
+    env:
+      OPENAI_API_KEY: sk-...
+      FEATURE_FLAG: enabled
+    ```
+
+    <Warning>
+      Avoid copying secrets into `env` using template syntax like `OPENAI_API_KEY: '{{env.OPENAI_API_KEY}}'`. This resolves the secret into the eval config and may appear in exported results.
+    </Warning>
+  </Accordion>
+</AccordionGroup>
+
+## Adding assertions
+
+Assertions automatically check LLM outputs against conditions you define. Without assertions, you review outputs manually. With assertions, promptfoo marks each test as pass or fail and calculates an accuracy score.
+
+```yaml
+tests:
+  - vars:
+      language: French
+      input: Hello world
+    assert:
+      - type: contains-json
+      - type: javascript
+        value: output.toLowerCase().includes('bonjour')
+  - vars:
+      language: German
+      input: How's it going?
+    assert:
+      - type: similar
+        value: was geht
+        threshold: 0.6
+```
+
+<Tip>
+  Every assertion type can be negated with a `not-` prefix. For example, `not-contains` or `not-regex`.
+</Tip>
+
+See [Assertion types](/configuration/expected-outputs) for the full list including `equals`, `regex`, `llm-rubric`, `factuality`, `is-json`, and more.
+
+## Reusing config with YAML references
+
+Use `$ref` to define assertion templates once and reuse them across multiple test cases:
+
+```yaml
+assertionTemplates:
+  noAIreference:
+    type: llm-rubric
+    value: does not describe self as an AI, model, or chatbot
+  startsUpperCase:
+    type: javascript
+    value: output[0] === output[0].toUpperCase()
+
+tests:
+  - vars:
+      language: French
+      input: Hello world
+    assert:
+      - $ref: '#/assertionTemplates/startsUpperCase'
+  - vars:
+      language: German
+      input: How's it going?
+    assert:
+      - $ref: '#/assertionTemplates/noAIreference'
+      - $ref: '#/assertionTemplates/startsUpperCase'
+```
+
+## Multiple config files
+
+Split large eval suites into separate config files and run them together:
+
+```bash
+# Run a single config
+promptfoo eval -c usecase1.yaml
+
+# Combine multiple configs in one run
+promptfoo eval -c config1.yaml -c config2.yaml
+
+# Glob all configs in a directory
+promptfoo eval -c my_configs/*
+```
+
+## Next steps
+
+<CardGroup cols={3}>
+  <Card title="Prompts" icon="file-lines" href="/configuration/prompts">
+    Inline strings, file formats, chat JSON, and dynamic prompt functions.
+  </Card>
+  <Card title="Test cases" icon="flask" href="/configuration/test-cases">
+    Variables, CSV loading, JSON/JSONL, and Python-generated tests.
+  </Card>
+  <Card title="Assertion types" icon="check-circle" href="/configuration/expected-outputs">
+    All assertion types with examples including model-graded evals.
+  </Card>
+</CardGroup>

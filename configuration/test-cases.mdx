@@ -1,0 +1,346 @@
+---
+title: "Writing test cases for LLM evals"
+description: "Define evaluation scenarios with inline vars, CSV files, JSON/JSONL, Python generators, and metadata. Covers assertions, filtering, and dynamic test generation."
+---
+
+Test cases define the inputs you feed to your prompts and the conditions you expect the outputs to meet. Each test case provides variable values that are substituted into your prompts, plus optional assertions that automatically verify the output.
+
+## Inline test cases
+
+The simplest way to define tests is directly in `promptfooconfig.yaml`:
+
+```yaml
+tests:
+  - vars:
+      question: 'What is the capital of France?'
+    assert:
+      - type: contains
+        value: 'Paris'
+
+  - vars:
+      question: 'What is 2 + 2?'
+    assert:
+      - type: equals
+        value: '4'
+```
+
+### Full test case structure
+
+```yaml
+tests:
+  - description: 'Optional label shown in results'
+    vars:
+      var1: value1
+      var2: value2
+    assert:
+      - type: contains
+        value: 'expected text'
+    metadata:
+      category: math
+      difficulty: easy
+```
+
+## Variables (vars)
+
+The `vars` map provides key-value pairs substituted into your prompts. Values can be strings, numbers, objects, or arrays.
+
+```yaml
+tests:
+  - vars:
+      language: French
+      input: Hello world
+```
+
+### Array vars expand into multiple tests
+
+If a var's value is an array, promptfoo generates one test for every combination:
+
+```yaml
+tests:
+  - vars:
+      language:
+        - French
+        - German
+        - Spanish
+      input:
+        - 'Hello world'
+        - 'Good morning'
+    assert:
+      - type: similar
+        value: 'Hello world'
+        threshold: 0.8
+```
+
+This produces 6 test cases (3 languages × 2 inputs). To pass arrays directly to assertions without expansion, set `options.disableVarExpansion: true`.
+
+### Loading vars from files
+
+Individual variables can reference external files using `file://`:
+
+```yaml
+tests:
+  - vars:
+      context: file://path/to/context.txt
+      paper: file://pdfs/arxiv_1.pdf
+      config_data: file://config.yaml
+```
+
+<Note>
+  `file://` paths are resolved relative to the config file's directory, not the current working directory.
+</Note>
+
+### Dynamic variables (JavaScript)
+
+```yaml
+tests:
+  - vars:
+      context: file://fetch_context.js
+```
+
+```javascript
+module.exports = async function (varName, prompt, otherVars, provider) {
+  const role = otherVars.role;
+  return { output: PROMPTS[role] };
+};
+```
+
+### Dynamic variables (Python)
+
+```python
+def get_var(var_name, prompt, other_vars):
+    role = other_vars.get("role")
+    return {"output": PROMPTS[role]}
+```
+
+## Loading from CSV
+
+CSV files are ideal for bulk test data maintained in spreadsheets:
+
+```yaml
+tests: file://test_cases.csv
+```
+
+```csv
+question,expectedAnswer
+"What is 2+2?","4"
+"What is the capital of France?","Paris"
+"Who wrote Romeo and Juliet?","Shakespeare"
+```
+
+Column headers become variable names automatically.
+
+### Assertions in CSV
+
+Use the special `__expected` column to declare assertions inline:
+
+```csv
+input,__expected
+"Hello world","contains: Hello"
+"Calculate 5 * 6","equals: 30"
+"What's the weather?","llm-rubric: Provides weather information"
+```
+
+For multiple assertions, use numbered columns:
+
+```csv
+question,__expected1,__expected2
+"What is 2+2?","equals: 4","contains: four"
+```
+
+### Assertion string syntax
+
+| `__expected` value | Assertion type |
+|---|---|
+| `Paris` | `equals` |
+| `contains:Paris` | `contains` |
+| `similar(0.8):Hello there` | `similar` with threshold |
+| `regex:^Hello.*$` | `regex` |
+| `llm-rubric:Is helpful` | `llm-rubric` |
+| `factuality:Paris is the capital` | `factuality` |
+| `javascript:output.length < 100` | `javascript` |
+| `not-contains:error` | negated assertion |
+
+### Special CSV columns
+
+| Column | Purpose |
+|--------|---------|
+| `__expected` | Single assertion |
+| `__expected1`, `__expected2`, ... | Multiple assertions |
+| `__description` | Test description |
+| `__threshold` | Pass threshold (0–1) |
+| `__metadata:category` | Filterable metadata field |
+
+### Metadata in CSV
+
+```csv
+question,__expected,__metadata:category,__metadata:difficulty
+"What is 2+2?","equals: 4","math","easy"
+"Explain quantum physics","llm-rubric: Accurate","science","hard"
+```
+
+Filter tests at eval time:
+
+```bash
+promptfoo eval --filter-metadata category=math
+promptfoo eval --filter-metadata difficulty=easy
+```
+
+## Loading from JSON/JSONL
+
+### JSON array
+
+```json
+[
+  {
+    "vars": { "topic": "artificial intelligence" },
+    "assert": [{ "type": "contains", "value": "AI" }]
+  },
+  {
+    "vars": { "topic": "climate change" },
+    "assert": [{ "type": "llm-rubric", "value": "Discusses environmental impact" }]
+  }
+]
+```
+
+### JSONL (one test per line)
+
+```jsonl
+{"vars": {"x": 5, "y": 3}, "assert": [{"type": "equals", "value": "8"}]}
+{"vars": {"x": 10, "y": 7}, "assert": [{"type": "equals", "value": "17"}]}
+```
+
+## Python-generated test cases
+
+Generate test cases programmatically from databases, APIs, or any external source:
+
+```yaml
+tests: file://generate_tests.py:create_tests
+```
+
+```python
+def create_tests():
+    test_cases = []
+    test_data = load_test_data()
+
+    for item in test_data:
+        test_cases.append({
+            "vars": {
+                "input": item["input"],
+                "context": item["context"]
+            },
+            "assert": [{
+                "type": "contains",
+                "value": item["expected"]
+            }]
+        })
+
+    return test_cases
+```
+
+Pass configuration to the generator:
+
+```yaml
+tests:
+  - path: file://generate_tests.py:create_tests
+    config:
+      dataset: 'validation'
+      category: 'math'
+      sample_size: 100
+```
+
+## JavaScript/TypeScript-generated test cases
+
+```yaml
+tests: file://generate_tests.js
+```
+
+```javascript
+module.exports = async function () {
+  const testCases = [];
+
+  for (let i = 1; i <= 10; i++) {
+    testCases.push({
+      description: `Test case ${i}`,
+      vars: {
+        number: i,
+        squared: i * i,
+      },
+      assert: [{ type: 'contains', value: String(i * i) }],
+    });
+  }
+
+  return testCases;
+};
+```
+
+## Metadata on test cases
+
+Add arbitrary metadata to test cases for filtering and organization:
+
+```yaml
+tests:
+  - vars:
+      query: 'Reset password'
+    metadata:
+      feature: authentication
+      priority: high
+```
+
+Filter tests by metadata at eval time:
+
+```bash
+promptfoo eval --filter-metadata feature=authentication
+```
+
+## Filtering tests by provider
+
+Run specific tests against specific providers:
+
+```yaml
+providers:
+  - id: openai:gpt-3.5-turbo
+    label: fast-model
+  - id: openai:gpt-4
+    label: smart-model
+
+tests:
+  - vars:
+      question: 'What is 2 + 2?'
+    providers:
+      - fast-model
+
+  - vars:
+      question: 'Explain quantum entanglement'
+    providers:
+      - smart-model
+```
+
+Without a `providers` field, a test runs against all providers (the default cartesian product behavior). `providers: []` skips the test entirely.
+
+## Combining multiple test sources
+
+Mix inline tests, CSV files, and generated tests in one config:
+
+```yaml
+tests:
+  # Quick smoke tests inline
+  - vars:
+      test: 'quick check'
+
+  # Bulk tests from CSV
+  - file://tests/full_suite.csv
+
+  # Dynamically generated edge cases
+  - file://tests/generate_edge_cases.js
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Expected outputs" icon="circle-check" href="/configuration/expected-outputs">
+    Define assertions that validate your LLM outputs automatically.
+  </Card>
+  <Card title="Configuration parameters" icon="sliders" href="/configuration/parameters">
+    Full reference for all top-level configuration options.
+  </Card>
+</CardGroup>

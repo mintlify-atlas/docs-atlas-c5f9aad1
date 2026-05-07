@@ -1,0 +1,165 @@
+---
+title: "Multi-turn conversation attack strategies"
+description: "Crescendo, GOAT, Hydra, and Mischievous User strategies that exploit conversation context to escalate attacks across multiple turns."
+---
+
+Multi-turn strategies conduct adversarial attacks across several conversation turns rather than in a single prompt. They exploit the tendency of LLMs to become more compliant as a conversation progresses, to track context across turns, and to soften their boundaries when requests escalate gradually. Vulnerabilities that only appear after multiple interactions — invisible to single-turn tests — are surfaced by these strategies.
+
+## How multi-turn attacks differ from single-turn
+
+Single-turn strategies send one transformed prompt and record the response. Multi-turn strategies maintain a conversation, adapting each subsequent message based on the model's previous reply. This creates two distinct advantages:
+
+- **Context accumulation**: The model carries over established facts, personas, and framings from earlier turns.
+- **Escalation**: Requests start innocuous and incrementally move toward the target behavior, staying under the refusal threshold at each step.
+
+When the model refuses, multi-turn strategies can backtrack to an earlier point in the conversation and try a different escalation path.
+
+## Crescendo
+
+Crescendo is based on [Microsoft Research's Crescendo paper](https://crescendo-the-multiturn-jailbreak.github.io/). It begins with a benign opening related to the target topic and increases the intensity or specificity of each turn, approaching the harmful behavior gradually.
+
+```yaml
+strategies:
+  - id: crescendo
+    config:
+      maxTurns: 5
+      maxBacktracks: 5
+      stateful: false
+      continueAfterSuccess: false
+```
+
+**Config options:**
+
+| Option | Default | Description |
+|---|---|---|
+| `maxTurns` | `5` | Maximum conversation turns per test case |
+| `maxBacktracks` | `5` | Maximum times to backtrack after a refusal |
+| `stateful` | `false` | When `true`, sends only the latest message (for systems managing their own history) |
+| `continueAfterSuccess` | `false` | When `true`, continues after the first successful attack to find additional vectors |
+
+## GOAT
+
+GOAT (Generative Offensive Agent Tester) was introduced by Meta researchers in 2024. It achieves an Attack Success Rate (ASR@10) of 97% against Llama 3.1 and 88% against GPT-4-Turbo on the JailbreakBench dataset.
+
+GOAT uses an attacker LLM that reasons through each turn in three steps:
+
+<Steps>
+  <Step title="Observation">
+    Analyzes the target model's previous response and identifies which safety mechanisms were triggered.
+  </Step>
+  <Step title="Strategic planning">
+    Reflects on conversation progress and selects the next adversarial approach from its toolkit: output manipulation, safe response distractors, fictional scenarios, and more.
+  </Step>
+  <Step title="Attack generation">
+    Combines selected techniques to produce the next conversation turn.
+  </Step>
+</Steps>
+
+```yaml
+strategies:
+  - id: goat
+    config:
+      maxTurns: 5
+      stateful: false
+      continueAfterSuccess: false
+```
+
+**Config options:**
+
+| Option | Default | Description |
+|---|---|---|
+| `maxTurns` | `5` | Maximum conversation turns per test case |
+| `stateful` | `false` | When `true`, sends only the latest message |
+| `continueAfterSuccess` | `false` | Continue after first success to find additional vectors |
+
+## Hydra
+
+`jailbreak:hydra` coordinates an attacker agent that branches across multiple conversational paths simultaneously. It remembers every refusal, automatically manages backtracking, and shares successful tactics across the full scan — making it more efficient than Crescendo when many test cases share similar topics.
+
+```yaml
+strategies:
+  - id: jailbreak:hydra
+    config:
+      maxTurns: 10
+```
+
+## Mischievous User
+
+`mischievous-user` simulates a persistent, creative user who tries different phrasings and approaches over several turns to elicit a policy-violating response, without the adversarial LLM infrastructure of GOAT or Hydra.
+
+```yaml
+strategies:
+  - id: mischievous-user
+    config:
+      maxTurns: 5
+      stateful: false
+```
+
+## Enabling multi-turn strategies
+
+Add any of these strategies to your `redteam.strategies` list:
+
+```yaml
+redteam:
+  plugins:
+    - harmful
+    - pii
+    - excessive-agency
+  strategies:
+    - crescendo
+    - goat
+    - jailbreak:hydra
+    - mischievous-user
+```
+
+## Session management
+
+By default, each turn includes the full conversation history. If your target system manages its own conversation state and expects only the latest message, set `stateful: true` and configure session handling in your provider.
+
+```yaml
+strategies:
+  - id: crescendo
+    config:
+      stateful: true
+
+defaultTest:
+  options:
+    transformVars: '{ ...vars, sessionId: context.uuid }'
+```
+
+## Unblocking
+
+Multi-turn strategies include an unblocking feature that generates contextual answers when the target asks clarifying questions that would otherwise stall the conversation. It is disabled by default.
+
+```bash
+export PROMPTFOO_ENABLE_UNBLOCKING=true
+promptfoo redteam run
+```
+
+Enable unblocking when testing conversational agents, customer service bots, or domain-specific assistants that frequently ask for context.
+
+## Continue after success
+
+By default, Crescendo and GOAT stop at the first successful attack. Set `continueAfterSuccess: true` to collect multiple attack vectors per test case:
+
+```yaml
+strategies:
+  - id: crescendo
+    config:
+      maxTurns: 10
+      continueAfterSuccess: true
+  - id: goat
+    config:
+      maxTurns: 8
+      continueAfterSuccess: true
+```
+
+<Warning>
+Multi-turn strategies are expensive: each test case generates many API calls. Start with a small plugin set and a cheaper provider before scaling. Consider `jailbreak:meta` (single-turn iterative) as a lower-cost alternative for initial coverage.
+</Warning>
+
+## Related
+
+- [Jailbreak strategies](/red-team/strategies/jailbreaks)
+- [Strategies overview](/red-team/strategies/overview)
+- [Red team configuration](/red-team/configuration)

@@ -1,0 +1,146 @@
+---
+title: "Anthropic Claude provider configuration"
+description: "Configure Anthropic Claude models including Opus, Sonnet, and Haiku in Promptfoo with support for extended thinking and tool use via the messages API."
+---
+
+The Anthropic provider gives access to the Claude family of models via the Anthropic Messages API. Claude models are known for strong reasoning, long context, and precise instruction following.
+
+<Note>
+Claude models are also available through [AWS Bedrock](/providers/aws-bedrock), [Azure AI Foundry](/providers/azure), and Google Vertex AI, which may be preferable for enterprise deployments.
+</Note>
+
+## Authentication
+
+Set the `ANTHROPIC_API_KEY` environment variable:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Or specify it in your provider config:
+
+```yaml
+providers:
+  - id: anthropic:messages:claude-opus-4-6
+    config:
+      apiKey: sk-ant-...
+```
+
+Create API keys at [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys).
+
+## Provider string format
+
+All Claude models use the `anthropic:messages:<model-id>` format:
+
+```yaml
+providers:
+  - anthropic:messages:claude-opus-4-7
+  - anthropic:messages:claude-sonnet-4-6
+  - anthropic:messages:claude-opus-4-6
+  - anthropic:messages:claude-3-5-sonnet-20241022
+  - anthropic:messages:claude-3-5-haiku-20241022
+```
+
+## Basic configuration
+
+```yaml title="promptfooconfig.yaml"
+providers:
+  - id: anthropic:messages:claude-opus-4-6
+    config:
+      temperature: 0.7
+      max_tokens: 2048
+```
+
+## Extended thinking
+
+Claude supports extended thinking for deeper reasoning on complex tasks. Enable it with the `thinking` config option:
+
+```yaml title="promptfooconfig.yaml"
+providers:
+  - id: anthropic:messages:claude-opus-4-6
+    config:
+      max_tokens: 16000
+      thinking:
+        type: enabled
+        budget_tokens: 10000  # tokens reserved for internal reasoning
+```
+
+<Tip>
+Set `budget_tokens` to less than `max_tokens`. The model uses the budget for internal chain-of-thought before producing its final response.
+</Tip>
+
+You can also use adaptive thinking, which lets Claude decide when to think:
+
+```yaml
+providers:
+  - id: anthropic:messages:claude-opus-4-6
+    config:
+      thinking:
+        type: adaptive
+```
+
+To hide the thinking content from the output (it is shown by default):
+
+```yaml
+providers:
+  - id: anthropic:messages:claude-opus-4-6
+    config:
+      thinking:
+        type: enabled
+        budget_tokens: 5000
+      showThinking: false
+```
+
+## Tool use
+
+```yaml
+providers:
+  - id: anthropic:messages:claude-opus-4-6
+    config:
+      tools:
+        - name: get_weather
+          description: Get current weather for a location
+          input_schema:
+            type: object
+            properties:
+              location:
+                type: string
+                description: City and country
+            required: [location]
+      tool_choice:
+        type: auto
+```
+
+## Prompt caching
+
+Enable prompt caching to reduce costs on repeated prompts with shared prefixes:
+
+```yaml
+providers:
+  - id: anthropic:messages:claude-opus-4-6
+    config:
+      cache_control: true
+```
+
+## Configuration reference
+
+| Parameter | Environment variable | Description |
+|---|---|---|
+| `apiKey` | `ANTHROPIC_API_KEY` | Anthropic API key |
+| `apiBaseUrl` | `ANTHROPIC_BASE_URL` | Override the API base URL |
+| `temperature` | `ANTHROPIC_TEMPERATURE` | Output randomness (default: 0) |
+| `max_tokens` | `ANTHROPIC_MAX_TOKENS` | Max output tokens (default: 1024) |
+| `top_p` | — | Nucleus sampling; mutually exclusive with `temperature` |
+| `top_k` | — | Sample from top K tokens only |
+| `stop_sequences` | — | Array of strings that stop generation |
+| `thinking` | — | Extended thinking: `{ type: "enabled" \| "adaptive" \| "disabled", budget_tokens?: number }` |
+| `showThinking` | — | Include thinking blocks in output (default: true) |
+| `tools` | — | Array of tool definitions |
+| `tool_choice` | — | Tool selection object |
+| `effort` | — | Output effort: `low`, `medium`, `high`, `xhigh`, `max` |
+| `cache_control` | — | Auto-apply cache control to the last cacheable block |
+| `stream` | — | Enable streaming (required when `max_tokens` > 21,333) |
+| `metadata` | — | Request metadata, e.g. `{ user_id: "..." }` |
+| `headers` | — | Additional HTTP headers |
+| `inputCost` | — | Override input token cost estimate |
+| `outputCost` | — | Override output token cost estimate |

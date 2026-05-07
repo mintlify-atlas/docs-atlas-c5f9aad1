@@ -1,0 +1,124 @@
+---
+title: "LLM provider integrations in Promptfoo"
+description: "Connect Promptfoo to OpenAI, Anthropic, Google, Azure, AWS Bedrock, Ollama, HuggingFace, and custom HTTP or script-based providers for LLM evals."
+---
+
+Providers are the interfaces to language models and AI services in Promptfoo. They can be specified under either the `providers` or `targets` key in your configuration — the two keys are interchangeable. Each provider is identified by a string that encodes the API type and model name.
+
+<CardGroup cols={2}>
+  <Card title="OpenAI" href="/providers/openai">
+    GPT-4o, GPT-5, o-series reasoning models, embeddings, and assistants
+  </Card>
+  <Card title="Anthropic" href="/providers/anthropic">
+    Claude Opus, Sonnet, and Haiku models with extended thinking support
+  </Card>
+  <Card title="Google Gemini" href="/providers/google">
+    Gemini 2.5 Pro and Flash via Google AI Studio or Vertex AI
+  </Card>
+  <Card title="Azure OpenAI" href="/providers/azure">
+    Azure-hosted OpenAI deployments with Entra ID or API key auth
+  </Card>
+  <Card title="AWS Bedrock" href="/providers/aws-bedrock">
+    Claude, Llama, Nova, Mistral, and Titan models on AWS infrastructure
+  </Card>
+  <Card title="Ollama" href="/providers/ollama">
+    Run Llama, Mistral, Phi, and Qwen models locally with no API key
+  </Card>
+  <Card title="HuggingFace" href="/providers/huggingface">
+    Thousands of models via HuggingFace Inference API and chat endpoint
+  </Card>
+  <Card title="Custom providers" href="/providers/custom">
+    HTTP endpoints, Python scripts, JavaScript modules, and shell commands
+  </Card>
+</CardGroup>
+
+## Provider string format
+
+Providers are specified using a colon-separated string that identifies the API type and model:
+
+```yaml
+providers:
+  - openai:gpt-4o
+  - anthropic:messages:claude-opus-4-6
+  - google:gemini-2.5-pro
+  - bedrock:us.anthropic.claude-opus-4-6-v1:0
+  - ollama:chat:llama3.3
+  - huggingface:chat:meta-llama/Llama-3.3-70B-Instruct
+```
+
+The general pattern is `<provider>:<model>` or `<provider>:<endpoint>:<model>` when you need to specify a particular API endpoint explicitly.
+
+## Object format with configuration
+
+To pass configuration options to a provider, use the object format with an `id` and `config` key:
+
+```yaml
+providers:
+  - id: openai:chat:gpt-4o
+    config:
+      temperature: 0.7
+      max_tokens: 1024
+
+  - id: anthropic:messages:claude-opus-4-6
+    config:
+      max_tokens: 2048
+      thinking:
+        type: enabled
+        budget_tokens: 8000
+
+  - id: azure:chat:my-gpt4-deployment
+    config:
+      apiHost: myworkspace.openai.azure.com
+```
+
+## Authentication
+
+Most providers read credentials from environment variables:
+
+```bash
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
+export GOOGLE_API_KEY=AIza...
+```
+
+You can also specify the key inline using the `apiKey` config option, which is useful when comparing multiple accounts or projects in one eval:
+
+```yaml
+providers:
+  - id: openai:gpt-4o
+    config:
+      apiKey: sk-...
+```
+
+## Common configuration options
+
+These options are supported across most providers:
+
+| Option | Description |
+|---|---|
+| `temperature` | Controls output randomness (0.0 – 1.0) |
+| `max_tokens` | Maximum tokens to generate |
+| `top_p` | Nucleus sampling parameter |
+| `frequency_penalty` | Penalizes repeated tokens |
+| `presence_penalty` | Penalizes tokens already present in context |
+| `stop` | Sequences that stop generation |
+| `inputCost` | Override input token cost estimate |
+| `outputCost` | Override output token cost estimate |
+
+## File-based provider configuration
+
+For complex setups, store provider config in a separate YAML file and reference it:
+
+```yaml title="promptfooconfig.yaml"
+providers:
+  - file://providers.yaml
+```
+
+```yaml title="providers.yaml"
+- id: openai:gpt-4o
+  config:
+    temperature: 0.7
+- id: anthropic:messages:claude-opus-4-6
+  config:
+    max_tokens: 1000
+```

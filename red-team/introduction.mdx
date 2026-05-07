@@ -1,0 +1,86 @@
+---
+title: "AI red teaming with Promptfoo"
+description: "Systematically find vulnerabilities in LLM applications before production using automated adversarial testing, 70+ built-in plugins, and attack strategies."
+---
+
+Promptfoo's red teaming framework helps AI teams find security vulnerabilities in LLM applications through automated adversarial testing. By generating thousands of targeted attack probes and evaluating model responses, you get a quantified risk report showing exactly where your application is vulnerable and how to fix it.
+
+## What red teaming means for AI
+
+Red teaming LLMs differs from traditional software testing because AI systems are non-deterministic and have an enormous attack surface. A single model can respond differently to the same input across runs, and attackers can exploit the model's broad knowledge in unexpected ways.
+
+Promptfoo addresses this by systematically probing your application with adversarial inputs across dozens of vulnerability categories, running each attack multiple times to account for stochasticity, then grading results automatically using deterministic checks and model-based evaluation.
+
+This mirrors how foundation labs like OpenAI and Anthropic stress-test their models before release—now accessible to any engineering team.
+
+## Vulnerability types Promptfoo finds
+
+Promptfoo tests for both model-layer and application-layer vulnerabilities:
+
+**Security and privacy**
+- Prompt injection and indirect prompt injection
+- PII leakage (from context, RAG data sources, or training data)
+- Data exfiltration via markdown images, link unfurling, and other techniques
+- Jailbreaks that bypass safety guardrails
+
+**Harmful content**
+- Hate speech, harassment, and radicalization
+- Self-harm and violent content
+- Chemical, biological, and indiscriminate weapon instructions
+- Child exploitation material
+- Illegal drug synthesis
+
+**Agentic and application risks**
+- Unauthorized tool use and privilege escalation (BFLA/BOLA)
+- SQL injection through natural language interfaces
+- Cross-session data leakage
+- Excessive agency and overreliance
+
+**Compliance and ethics**
+- Bias across age, gender, race, and disability
+- Hallucination and misinformation
+- Copyright violations and imitation
+- Competitor endorsement
+
+## Who uses it
+
+Promptfoo red teaming is used by AI engineering teams and AppSec professionals who need to:
+
+- Measure application risk before deployment
+- Integrate security testing into CI/CD pipelines
+- Demonstrate compliance with OWASP LLM Top 10, NIST AI RMF, and EU AI Act requirements
+- Track vulnerability trends over time as the application evolves
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/red-team/quickstart">
+    Run your first red team scan in minutes.
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/red-team/configuration">
+    Configure plugins, strategies, and targets.
+  </Card>
+  <Card title="Plugins" icon="puzzle-piece" href="/red-team/plugins/overview">
+    Browse all 70+ built-in vulnerability plugins.
+  </Card>
+  <Card title="Strategies" icon="shield" href="/red-team/strategies/overview">
+    Explore attack strategies like jailbreak and prompt injection.
+  </Card>
+</CardGroup>
+
+## 70+ built-in plugins and attack strategies
+
+Promptfoo ships with over 70 plugins covering specific vulnerability types. Each plugin generates targeted adversarial inputs for its category—for example, `harmful:self-harm` generates prompts designed to elicit self-harm content, while `pii:direct` tests whether the model reveals personally identifiable information on request.
+
+Plugins are combined with **strategies** that wrap the generated inputs in specific attack patterns. Strategies include:
+
+- `jailbreak:meta` — Single-turn jailbreak using a meta-level attack model
+- `jailbreak:composite` — Combines multiple jailbreak techniques
+- `prompt-injection` — Appends adversarial instructions to user inputs
+- `crescendo` — Multi-turn escalation strategy from Microsoft Research
+- `goat` — Generative Offensive Agent Tester from Meta Research
+- `base64`, `rot13`, `leetspeak` — Obfuscation strategies to bypass content filters
+
+You can run plugins individually, use preset collections like `default` or `harmful`, or define custom policies to enforce organization-specific guidelines.
+
+<Note>
+  Promptfoo supports testing via HTTP API, browser automation, direct model access, Python scripts, and JavaScript—so it connects to any LLM application regardless of architecture.
+</Note>

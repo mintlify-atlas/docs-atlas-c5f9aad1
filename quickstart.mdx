@@ -1,81 +1,121 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
-icon: 'rocket'
+title: "Quickstart: Run your first LLM eval"
+description: "Set up and run your first promptfoo evaluation in five steps. Install the CLI, scaffold an example, set an API key, run the eval, and review results."
 ---
 
-## Get started in three steps
+This guide walks you through running your first LLM evaluation with promptfoo. You will install the CLI, scaffold a working example, run the eval, and inspect results—all in under five minutes.
 
-Get your documentation site running locally and make your first customization.
+<Steps>
+  <Step title="Install promptfoo">
+    Install the CLI globally with npm:
 
-### Step 1: Set up your local environment
+    ```bash
+    npm install -g promptfoo
+    ```
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    Alternatively, use Homebrew (`brew install promptfoo`), pip (`pip install promptfoo`), or run any command without installing via `npx promptfoo@latest`.
 
-### Step 2: Deploy your changes
+    <Note>
+      Requires Node.js `^20.20.0` or `>=22.22.0`. See [installation](/installation) for all methods.
+    </Note>
+  </Step>
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+  <Step title="Scaffold the getting-started example">
+    Create the example project in the current directory:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    ```bash
+    promptfoo init --example getting-started
+    cd getting-started
+    ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    This downloads the [getting-started example](https://github.com/promptfoo/promptfoo/tree/main/examples/getting-started) from the promptfoo repository. The directory contains:
 
-### Step 3: Go live
+    - `promptfooconfig.yaml` — prompts, providers, and test cases
+    - `README.md` — explanation of the example
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    The configuration file looks like this:
+
+    ```yaml promptfooconfig.yaml
+    # yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+    description: 'Getting started'
+
+    prompts:
+      - 'Convert the following English text to {{language}}: {{input}}'
+
+    providers:
+      - openai:chat:gpt-5.5
+      - openai:chat:gpt-5.4-mini
+      # - anthropic:messages:claude-sonnet-4-6
+      # - google:gemini-3.1-pro-preview
+
+    tests:
+      - vars:
+          language: French
+          input: Hello world
+        assert:
+          - type: contains
+            value: 'Bonjour le monde'
+      - vars:
+          language: Spanish
+          input: Where is the library?
+        assert:
+          - type: icontains
+            value: 'Dónde está la biblioteca'
+    ```
+
+    This config tests one prompt against two OpenAI models using two translation test cases. Each test case checks that the model output contains the expected translated phrase.
+  </Step>
+
+  <Step title="Set your API key">
+    Most providers require an API key. For the default OpenAI providers in this example:
+
+    ```bash
+    export OPENAI_API_KEY=sk-...
+    ```
+
+    <Tip>
+      You can also set keys in the `env:` block of your `promptfooconfig.yaml`. Never commit real keys to source control.
+    </Tip>
+  </Step>
+
+  <Step title="Run the eval">
+    From inside the `getting-started` directory, run:
+
+    ```bash
+    promptfoo eval
+    ```
+
+    Promptfoo sends each test case to each provider, evaluates the outputs against the assertions, and prints a results table in your terminal:
+
+    ```
+    ┌─────────────────────────────────────────────┬─────────────────┬─────────────────┐
+    │ Prompt                                      │ gpt-5.5         │ gpt-5.4-mini    │
+    ├─────────────────────────────────────────────┼─────────────────┼─────────────────┤
+    │ French: Hello world                         │ ✓ Pass          │ ✓ Pass          │
+    ├─────────────────────────────────────────────┼─────────────────┼─────────────────┤
+    │ Spanish: Where is the library?              │ ✓ Pass          │ ✓ Pass          │
+    └─────────────────────────────────────────────┴─────────────────┴─────────────────┘
+    ```
+
+    A green checkmark means the assertion passed. A red `✗` means it failed, and the output is shown inline so you can see what went wrong.
+  </Step>
+
+  <Step title="View results in the web UI">
+    Open the interactive web viewer to explore outputs side-by-side:
+
+    ```bash
+    promptfoo view
+    ```
+
+    This starts a local server and opens your browser to a matrix view where you can compare outputs across models, filter by pass/fail status, and share results with your team.
+  </Step>
+</Steps>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
+Now that you have run your first eval, here are some ways to go further:
 
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+- **[Configuration guide](/configuration/guide)** — Learn all configuration options: prompts, providers, assertions, variables, and scenarios.
+- **[Providers](/providers/overview)** — Browse all 80+ supported models including Anthropic, Google, Azure, Bedrock, and Ollama.
+- **[Red teaming](/red-team/introduction)** — Automatically scan your LLM app for jailbreaks, prompt injections, and other security vulnerabilities.
+- **[CI/CD integration](/integrations/ci-cd)** — Run evals automatically on every pull request.

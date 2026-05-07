@@ -1,0 +1,217 @@
+---
+title: "OWASP LLM Top 10 coverage in Promptfoo"
+description: "Map OWASP LLM Top 10 vulnerabilities to Promptfoo plugins and strategies, with config examples for each risk category in the 2025 list."
+---
+
+The [OWASP Top 10 for Large Language Model Applications](https://owasp.org/www-project-top-10-for-large-language-model-applications/) lists the most critical security risks in LLM deployments. Promptfoo is [listed by OWASP](https://genai.owasp.org/ai-security-solutions-landscape/) as a security solution for Generative AI and provides plugins and strategies that map directly to each item in the 2025 list.
+
+## Running an OWASP-focused scan
+
+Select the **OWASP LLM Top 10** preset in the Promptfoo UI, or use the shorthand in your config to cover all ten categories at once:
+
+```yaml
+redteam:
+  plugins:
+    - owasp:llm
+  strategies:
+    - jailbreak:meta
+    - jailbreak:composite
+    - jailbreak-templates
+```
+
+You can also target individual items using their shorthand IDs (e.g., `owasp:llm:01`).
+
+## LLM01: Prompt Injection
+
+Prompt injection occurs when user input or external content manipulates the LLM into ignoring its instructions.
+
+**Promptfoo coverage:** `prompt-injection` plugin (indirect injection via untrusted context), `jailbreak-templates` and `jailbreak:meta` strategies (direct manipulation).
+
+```yaml
+redteam:
+  plugins:
+    - owasp:llm:01
+    - indirect-prompt-injection
+  strategies:
+    - jailbreak-templates
+    - jailbreak:meta
+```
+
+## LLM02: Sensitive Information Disclosure
+
+The model reveals PII, credentials, proprietary data, or confidential business information.
+
+**Promptfoo coverage:** `pii:direct`, `pii:session`, `pii:social`, `pii:api-db`, `harmful:privacy`.
+
+```yaml
+redteam:
+  plugins:
+    - owasp:llm:02
+    - pii:direct
+    - pii:api-db
+    - pii:session
+    - pii:social
+    - harmful:privacy
+  strategies:
+    - jailbreak:meta
+    - jailbreak-templates
+```
+
+## LLM03: Supply Chain Vulnerabilities
+
+Risks from foundation models, fine-tuned models, hosted APIs, RAG data sources, and MCP tools — including behavioral drift, backdoors, and poisoned data.
+
+**Promptfoo coverage:** Run identical security tests across model versions to detect behavioral drift. Promptfoo also provides static model file scanning capabilities for supply chain risk.
+
+```yaml
+targets:
+  - id: openai:gpt-4o
+    label: current-production
+  - id: openai:gpt-4o-2024-08-06
+    label: candidate-upgrade
+
+redteam:
+  plugins:
+    - owasp:llm
+    - harmful
+    - pii
+  strategies:
+    - jailbreak:meta
+    - jailbreak-templates
+```
+
+## LLM04: Data and Model Poisoning
+
+Poisoned training data introduces unexpected biases or backdoors. Promptfoo detects downstream effects through behavioral testing.
+
+**Promptfoo coverage:** `harmful`, `overreliance`, `hallucination`.
+
+```yaml
+redteam:
+  plugins:
+    - owasp:llm:04
+    - harmful
+    - overreliance
+    - hallucination
+```
+
+## LLM05: Improper Output Handling
+
+The application passes LLM output to downstream systems without validation — enabling XSS, SQL injection, or remote code execution.
+
+**Promptfoo coverage:** Assertion-based output validation, `shell-injection`, `sql-injection`.
+
+```yaml
+redteam:
+  plugins:
+    - shell-injection
+    - sql-injection
+
+tests:
+  - vars:
+      query: Generate HTML content
+    assert:
+      - type: not-contains
+        value: '<script>'
+```
+
+## LLM06: Excessive Agency
+
+The LLM takes unauthorized or over-broad actions through tools, plugins, or function calls beyond what the user intended.
+
+**Promptfoo coverage:** `excessive-agency`, `overreliance`, `imitation`, `hijacking`, `rbac`.
+
+```yaml
+redteam:
+  plugins:
+    - owasp:llm:06
+    - excessive-agency
+    - overreliance
+    - imitation
+    - hijacking
+    - rbac
+```
+
+## LLM07: System Prompt Leakage
+
+The system prompt — which may contain secrets, instructions, or business logic — is extracted by an adversarial user.
+
+**Promptfoo coverage:** `prompt-extraction` plugin.
+
+```yaml
+redteam:
+  plugins:
+    - id: prompt-extraction
+      config:
+        systemPrompt: 'You are a customer support assistant for Acme Corp...'
+```
+
+<Note>
+The `systemPrompt` config value is required. It should match the actual system prompt you have deployed.
+</Note>
+
+## LLM08: Vector and Embedding Weaknesses
+
+Vulnerabilities in RAG pipelines: access control bypasses, indirect prompt injection via retrieved content, and RAG poisoning.
+
+**Promptfoo coverage:** `rbac`, `bola`, `bfla`, `indirect-prompt-injection`, RAG poisoning utility.
+
+```yaml
+redteam:
+  plugins:
+    - rbac
+    - bola
+    - bfla
+    - id: indirect-prompt-injection
+      config:
+        indirectInjectionVar: 'context'
+```
+
+## LLM09: Misinformation
+
+The model generates false or misleading content that appears credible, including hallucinations presented as facts.
+
+**Promptfoo coverage:** `hallucination`, `overreliance`.
+
+```yaml
+redteam:
+  plugins:
+    - owasp:llm:09
+    - hallucination
+    - overreliance
+```
+
+## LLM10: Unbounded Consumption
+
+Attackers drive excessive token generation, resource consumption, or repetitive pattern exploitation to cause Denial-of-Wallet or service degradation.
+
+**Promptfoo coverage:** `divergent-repetition` plugin.
+
+```yaml
+redteam:
+  plugins:
+    - owasp:llm:10
+    - divergent-repetition
+```
+
+## Plugin-to-OWASP mapping reference
+
+| OWASP item | Shorthand | Key plugins |
+|---|---|---|
+| LLM01: Prompt Injection | `owasp:llm:01` | `indirect-prompt-injection`, `jailbreak-templates` |
+| LLM02: Sensitive Info Disclosure | `owasp:llm:02` | `pii:direct`, `pii:session`, `pii:social`, `pii:api-db`, `harmful:privacy` |
+| LLM03: Supply Chain | `owasp:llm:03` | Multi-target comparison, ModelAudit |
+| LLM04: Data & Model Poisoning | `owasp:llm:04` | `harmful`, `overreliance`, `hallucination` |
+| LLM05: Improper Output Handling | `owasp:llm:05` | `shell-injection`, `sql-injection` |
+| LLM06: Excessive Agency | `owasp:llm:06` | `excessive-agency`, `rbac`, `hijacking` |
+| LLM07: System Prompt Leakage | `owasp:llm:07` | `prompt-extraction` |
+| LLM08: Vector & Embedding Weaknesses | `owasp:llm:08` | `rbac`, `bola`, `bfla`, `indirect-prompt-injection` |
+| LLM09: Misinformation | `owasp:llm:09` | `hallucination`, `overreliance` |
+| LLM10: Unbounded Consumption | `owasp:llm:10` | `divergent-repetition` |
+
+## Related
+
+- [NIST AI RMF alignment](/red-team/nist-ai-rmf)
+- [EU AI Act compliance](/red-team/eu-ai-act)
+- [Red team strategies overview](/red-team/strategies/overview)
+- [Red team plugins overview](/red-team/plugins/overview)

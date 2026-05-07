@@ -1,0 +1,202 @@
+---
+title: "Jailbreak strategies for LLM red teaming"
+description: "Iterative, tree-based, encoding, and sampling jailbreak strategies that bypass LLM safety guardrails through prompt manipulation and obfuscation."
+---
+
+Jailbreak strategies attempt to elicit policy-violating responses from a model by transforming or iteratively refining adversarial prompts. They range from cheap encoding transforms that defeat keyword filters to expensive attacker-LLM loops that adapt to each refusal.
+
+## Iterative jailbreaks
+
+### jailbreak:meta
+
+`jailbreak:meta` runs an LLM attacker that analyzes each refusal and generates a more effective single-shot prompt in the next iteration. After a configurable number of iterations, it reports the most successful variant found.
+
+```yaml
+strategies:
+  - id: jailbreak:meta
+    config:
+      numIterations: 20
+```
+
+You can also set the iteration count via environment variable:
+
+```bash
+PROMPTFOO_NUM_JAILBREAK_ITERATIONS=20
+```
+
+<Note>
+`jailbreak` (no suffix) is a deprecated alias for `jailbreak:meta`. Use `jailbreak:meta` in new configs.
+</Note>
+
+### jailbreak:tree
+
+`jailbreak:tree` explores a branching tree of prompt variations in parallel rather than a single linear chain. This allows it to backtrack from dead ends and find successful jailbreaks faster when the search space is large.
+
+```yaml
+strategies:
+  - jailbreak:tree
+```
+
+### jailbreak:composite
+
+`jailbreak:composite` stacks multiple jailbreak techniques into a single prompt — for example, combining roleplay framing, fictional context, and encoding. Composite prompts have higher bypass rates than any single technique alone.
+
+```yaml
+strategies:
+  - jailbreak:composite
+```
+
+### jailbreak:likert
+
+`jailbreak:likert` frames harmful requests as Likert-scale survey items or academic rating tasks, exploiting the tendency of models to respond helpfully to structured evaluation formats.
+
+```yaml
+strategies:
+  - jailbreak:likert
+```
+
+## Encoding-based evasion
+
+Encoding strategies transform the adversarial prompt before sending it, defeating safety filters that match on raw text. They are inexpensive and can be combined with iterative strategies.
+
+### base64
+
+Encodes the entire prompt in base64. Many safety systems decode and re-check content, but some keyword-based filters do not.
+
+```yaml
+strategies:
+  - base64
+```
+
+### rot13
+
+Applies ROT13 rotation cipher to the prompt.
+
+```yaml
+strategies:
+  - rot13
+```
+
+### hex
+
+Converts the prompt to hexadecimal encoding.
+
+```yaml
+strategies:
+  - hex
+```
+
+### leetspeak
+
+Substitutes letters with visually similar numbers and symbols (e.g., `a` → `4`, `e` → `3`).
+
+```yaml
+strategies:
+  - leetspeak
+```
+
+### homoglyph
+
+Replaces characters with visually identical Unicode look-alikes. The text appears unchanged to a human reader but does not match keyword blocklists that compare byte values.
+
+```yaml
+strategies:
+  - homoglyph
+```
+
+### Combining encoding strategies
+
+Encoding strategies can be stacked. Each generates a separate set of test cases:
+
+```yaml
+redteam:
+  plugins:
+    - harmful
+    - pii
+  strategies:
+    - base64
+    - rot13
+    - hex
+    - leetspeak
+    - homoglyph
+```
+
+## Best-of-N sampling
+
+`best-of-n` generates N differently-phrased versions of each adversarial prompt and sends all of them. It selects the variant that most successfully achieves the attack goal.
+
+```yaml
+strategies:
+  - id: best-of-n
+    config:
+      n: 5
+```
+
+This is effective when a model's susceptibility depends on exact phrasing rather than topic.
+
+## Static template library
+
+`jailbreak-templates` applies a curated library of known jailbreak templates — DAN variants, roleplay setups, fictional framing — to every test case. It requires no LLM attacker and is inexpensive to run.
+
+```yaml
+strategies:
+  - jailbreak-templates
+```
+
+<Note>
+`prompt-injection` is a deprecated alias for `jailbreak-templates`. Use `jailbreak-templates` in new configs.
+</Note>
+
+## When to use which strategy
+
+<AccordionGroup>
+  <Accordion title="Broadest coverage with moderate cost">
+    Use `jailbreak:meta` plus `jailbreak:composite` as your default pairing. Add encoding strategies for comprehensive filter testing.
+
+    ```yaml
+    strategies:
+      - jailbreak:meta
+      - jailbreak:composite
+      - base64
+      - rot13
+    ```
+  </Accordion>
+
+  <Accordion title="Speed over depth">
+    For a fast initial scan, `jailbreak-templates` and encoding strategies give quick signal with minimal API calls.
+
+    ```yaml
+    strategies:
+      - jailbreak-templates
+      - base64
+      - leetspeak
+    ```
+  </Accordion>
+
+  <Accordion title="Maximum thoroughness">
+    Combine iterative, tree-based, encoding, and sampling for the most comprehensive single-turn coverage.
+
+    ```yaml
+    strategies:
+      - jailbreak:meta
+      - jailbreak:tree
+      - jailbreak:composite
+      - best-of-n
+      - base64
+      - rot13
+      - hex
+      - leetspeak
+      - homoglyph
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+Iterative strategies (`jailbreak:meta`, `jailbreak:tree`) make multiple API calls per test case. Run them on a limited plugin set before scaling to a full scan.
+</Warning>
+
+## Related
+
+- [Multi-turn strategies](/red-team/strategies/multi-turn)
+- [Strategies overview](/red-team/strategies/overview)
+- [Red team configuration](/red-team/configuration)

@@ -1,0 +1,307 @@
+---
+title: "Promptfoo configuration reference"
+description: "Reference for all top-level promptfooconfig.yaml fields: prompts, providers, tests, defaultTest, outputPath, sharing, evaluateOptions, and env settings."
+---
+
+Every promptfoo evaluation is driven by a `promptfooconfig.yaml` file. This page documents the top-level configuration options. For detailed guides on specific topics, see [Prompts](/configuration/prompts), [Test cases](/configuration/test-cases), and [Assertion types](/configuration/expected-outputs).
+
+```yaml
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: My LLM evaluation
+
+prompts:
+  - 'Translate to {{language}}: {{text}}'
+
+providers:
+  - openai:gpt-5-mini
+
+tests:
+  - vars:
+      language: French
+      text: Hello world
+    assert:
+      - type: contains
+        value: Bonjour
+```
+
+## Top-level options
+
+<ParamField path="description" type="string">
+  Optional human-readable label for the eval. Shown in the web UI and included in exported results.
+
+  ```yaml
+  description: Customer service chatbot evaluation
+  ```
+</ParamField>
+
+<ParamField path="prompts" type="string | string[] | Prompt[]" required>
+  One or more prompts to evaluate. Accepts inline strings, `file://` references, glob patterns, and dynamic function files.
+
+  ```yaml
+  prompts:
+    - 'Summarize this: {{content}}'
+    - file://prompts/system_prompt.txt
+    - file://prompts/*.txt
+  ```
+
+  See [Defining prompts](/configuration/prompts) for the full range of formats.
+</ParamField>
+
+<ParamField path="providers" type="string | ProviderOptions | (string | ProviderOptions)[]" required>
+  One or more LLM providers to run prompts through. Can be a shorthand string or a detailed object with configuration overrides.
+
+  ```yaml
+  providers:
+    - openai:gpt-5-mini
+    - anthropic:messages:claude-sonnet-4-6
+    - id: openai:gpt-5
+      label: gpt5-low-temp
+      config:
+        temperature: 0.2
+  ```
+
+  Providers can also be loaded from external files:
+
+  ```yaml
+  providers:
+    - file://path/to/provider.yaml
+  ```
+</ParamField>
+
+<ParamField path="tests" type="string | TestCase[] | TestGeneratorConfig">
+  Test cases to evaluate. Can be inline objects, a path to a file, a glob, or a mix. If omitted, promptfoo runs each prompt/provider pair once with empty variables.
+
+  ```yaml
+  # Inline tests
+  tests:
+    - vars:
+        question: What is 2 + 2?
+      assert:
+        - type: equals
+          value: '4'
+
+  # From a CSV file
+  tests: file://tests/cases.csv
+
+  # Glob
+  tests:
+    - file://tests/accuracy/*.yaml
+    - file://tests/safety/*.yaml
+  ```
+
+  See [Writing test cases](/configuration/test-cases) for all supported formats including CSV, JSON, JSONL, and Python generators.
+</ParamField>
+
+<ParamField path="defaultTest" type="Partial<TestCase> | string">
+  Default properties applied to every test case. Useful for sharing assertions, variables, or options without repeating them.
+
+  ```yaml
+  defaultTest:
+    assert:
+      - type: llm-rubric
+        value: does not describe self as an AI, model, or chatbot
+    vars:
+      audience: developer
+  ```
+
+  Can also be a `file://` path to an external YAML or JSON file:
+
+  ```yaml
+  defaultTest: file://shared/default_test.yaml
+  ```
+
+  Individual tests can opt out of inherited assertions with `options.disableDefaultAsserts: true`.
+</ParamField>
+
+<ParamField path="outputPath" type="string | string[]">
+  Where to write evaluation results. If omitted, results are displayed in the web viewer. Supports multiple formats based on file extension.
+
+  ```yaml
+  outputPath: results/eval.html
+  ```
+
+  Supported formats: `.html`, `.json`, `.yaml`, `.csv`.
+</ParamField>
+
+<ParamField path="sharing" type="boolean | object" default="false">
+  Enable or configure result sharing. When `true`, promptfoo generates a shareable URL after evaluation.
+
+  ```yaml
+  sharing: true
+  ```
+
+  With custom URLs:
+
+  ```yaml
+  sharing:
+    apiBaseUrl: https://your-instance.promptfoo.app
+    appBaseUrl: https://your-instance.promptfoo.app
+  ```
+</ParamField>
+
+<ParamField path="env" type="Record<string, string | number | boolean>">
+  Environment variables scoped to the eval run. These override existing shell environment variables.
+
+  ```yaml
+  env:
+    OPENAI_API_KEY: sk-...
+    FEATURE_FLAG: enabled
+    MAX_TOKENS: 500
+  ```
+
+  <Warning>
+    Avoid copying secrets from your environment using `'{{env.SECRET}}'`. This resolves the value into the eval config and may appear in exported results.
+  </Warning>
+</ParamField>
+
+<ParamField path="nunjucksFilters" type="Record<string, string>">
+  Map of custom Nunjucks filter names to JavaScript file paths. Filters are available in all prompts.
+
+  ```yaml
+  nunjucksFilters:
+    uppercaseFirst: ./filters/uppercase_first.js
+    truncate: ./filters/truncate.js
+  ```
+</ParamField>
+
+<ParamField path="assertionTemplates" type="Record<string, Assertion>">
+  Named assertion templates you can reuse across test cases with `$ref`.
+
+  ```yaml
+  assertionTemplates:
+    noAIreference:
+      type: llm-rubric
+      value: does not describe self as an AI, model, or chatbot
+
+  tests:
+    - vars:
+        input: Hello
+      assert:
+        - $ref: '#/assertionTemplates/noAIreference'
+  ```
+</ParamField>
+
+<ParamField path="derivedMetrics" type="DerivedMetric[]">
+  Metrics computed after the eval from named assertion scores. Supports mathematical expressions and JavaScript functions.
+
+  ```yaml
+  derivedMetrics:
+    - name: f1_score
+      value: '2 * true_positives / (2 * true_positives + false_positives + false_negatives)'
+    - name: weighted_score
+      value: 'accuracy * 0.6 + relevance * 0.4'
+  ```
+</ParamField>
+
+<ParamField path="tags" type="Record<string, string>">
+  Optional key-value tags to describe the test suite, useful for filtering in the web UI.
+
+  ```yaml
+  tags:
+    env: production
+    application: chatbot
+    team: ml-platform
+  ```
+</ParamField>
+
+## evaluateOptions
+
+<ParamField path="evaluateOptions.maxConcurrency" type="number" default="4">
+  Maximum number of concurrent LLM API calls.
+
+  ```yaml
+  evaluateOptions:
+    maxConcurrency: 8
+  ```
+</ParamField>
+
+<ParamField path="evaluateOptions.repeat" type="number" default="1">
+  Number of times to run each test case. Useful for measuring consistency across repeated calls.
+
+  ```yaml
+  evaluateOptions:
+    repeat: 3
+  ```
+</ParamField>
+
+<ParamField path="evaluateOptions.delay" type="number" default="0">
+  Milliseconds to wait between API calls. Useful for rate-limited providers.
+
+  ```yaml
+  evaluateOptions:
+    delay: 500
+  ```
+</ParamField>
+
+<ParamField path="evaluateOptions.cache" type="boolean" default="true">
+  Whether to cache provider responses to disk. Disable with `--no-cache` flag or this option when testing latency or cost assertions.
+
+  ```yaml
+  evaluateOptions:
+    cache: false
+  ```
+</ParamField>
+
+<ParamField path="evaluateOptions.timeoutMs" type="number" default="0">
+  Timeout in milliseconds for each individual test case. When reached, the test is marked as an error. `0` means no timeout.
+
+  ```yaml
+  evaluateOptions:
+    timeoutMs: 30000  # 30 seconds
+  ```
+</ParamField>
+
+<ParamField path="evaluateOptions.maxEvalTimeMs" type="number" default="0">
+  Maximum total runtime for the entire evaluation. Remaining tests are marked as errors when this limit is reached. `0` means no limit.
+
+  ```yaml
+  evaluateOptions:
+    maxEvalTimeMs: 300000  # 5 minutes
+  ```
+</ParamField>
+
+## Complete example
+
+```yaml
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: Customer service chatbot evaluation
+
+prompts:
+  - 'You are a helpful customer service agent. {{query}}'
+  - file://prompts/chat_conversation.json
+
+providers:
+  - openai:gpt-5-mini
+  - id: anthropic:messages:claude-sonnet-4-6
+    label: claude-haiku
+
+defaultTest:
+  assert:
+    - type: llm-rubric
+      value: Response is professional and helpful
+
+tests:
+  - vars:
+      query: 'I need to return a product'
+    assert:
+      - type: contains
+        value: 'return policy'
+  - file://test_scenarios.csv
+
+outputPath: results/customer_service.html
+
+evaluateOptions:
+  maxConcurrency: 4
+  cache: true
+
+env:
+  OPENAI_API_KEY: sk-...
+```
+
+## JSON schema validation
+
+Add this comment to the top of your config for IDE autocompletion and validation:
+
+```yaml
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+```
